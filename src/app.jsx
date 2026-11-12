@@ -120,6 +120,22 @@ function App() {
     if (!e) { const end = d.nodes.find((n) => n.type === 'end'); e = d.edges.find((x) => x.target === end.id); }
     addOnEdge(e.id, typeId);
   };
+  const [activating, setActivating] = useState(false);
+  const activate = () => {
+    if (!okAll) return;
+    const d = wfsRef.current[docId];
+    const m = (d.status || '').match(/v(\d+)/);
+    const nextV = m ? parseInt(m[1]) + 1 : 1;
+    const history = d.history || [];
+    setActivating(true); setTimeout(() => setActivating(false), 700);
+    commit({ ...wfsRef.current, [docId]: { ...d, status: `Actif · v${nextV}`, history: [...history, { v: nextV - 1 || nextV, status: d.status || 'Brouillon', ts: new Date().toISOString().slice(0,16).replace('T',' ') }] } });
+    say(`Flux activé · version ${nextV}`);
+  };
+  const deactivate = () => {
+    const d = wfsRef.current[docId]; const m = (d.status || '').match(/v(\d+)/); const v = m ? parseInt(m[1]) : 1;
+    commit({ ...wfsRef.current, [docId]: { ...d, status: `Brouillon · v${v + 1}` } });
+    say('Flux repassé en brouillon — continuez à l’éditer.');
+  };
   const addStep = (text) => {
     const d = wfsRef.current[docId]; const spec = parseLine(text); const n = makeNode(spec.type, d, wfsRef.current);
     n.data.label = spec.label; if (spec.options) n.data.options = spec.options; n.data.key = makeKey(spec.label, d);
@@ -266,7 +282,7 @@ function App() {
   /* ---- palette commands ---- */
   const commands = () => {
     const c = [];
-    c.push({ g: 'Navigation', t: 'Tableau de bord', ic: 'grid', run: () => setView('dashboard') }, { g: 'Navigation', t: 'Tous les workflows', ic: 'list', run: () => setView('flows') }, { g: 'Navigation', t: 'Nouveau workflow', ic: 'plus', run: () => setNewOpen(true) }, { g: 'Actions', t: 'Lancer le Play', ic: 'play', k: 'P', run: goPlay }, { g: 'Actions', t: 'Revenir à l’édition', ic: 'flow', run: goEdit });
+    c.push({ g: 'Navigation', t: 'Tableau de bord', ic: 'grid', run: () => setView('dashboard') }, { g: 'Navigation', t: 'Nouveau workflow', ic: 'plus', run: () => setNewOpen(true) }, { g: 'Actions', t: 'Lancer le Play', ic: 'play', k: 'P', run: goPlay }, { g: 'Actions', t: 'Revenir à l’édition', ic: 'flow', run: goEdit });
     if (hasFork) c.push({ g: 'Actions', t: dual ? 'Fermer la vue parallèle' : 'Ouvrir la vue parallèle (double flux)', ic: 'columns', run: () => { setMode('edit'); setDual(!dual); } });
     c.push({ g: 'Actions', t: 'Réorganiser le flux', ic: 'layout', run: reflow }, { g: 'Actions', t: dir === 'TB' ? 'Flux horizontal' : 'Flux vertical', ic: 'updown', run: () => setDir(dir === 'TB' ? 'LR' : 'TB') },
       { g: 'Actions', t: 'Annuler', ic: 'undo', k: MOD + 'Z', run: undo }, { g: 'Actions', t: 'App mobile (démo)', ic: 'phone', run: () => setView('mobile') }, { g: 'Actions', t: 'Studio', ic: 'flow', run: () => setView('studio') },
@@ -285,9 +301,8 @@ function App() {
 
   return <div className={layoutCls} onClick={() => { setMenu(null); }}>
     <Markers />
-    <TopBar {...{ collab, setCollab, people, setPeople, review, setReview, say, newFlow: () => setNewOpen(true), view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist: hist.current, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct }} />
+    <TopBar {...{ collab, setCollab, people, setPeople, review, setReview, say, newFlow: () => setNewOpen(true), view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist: hist.current, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct, activate, deactivate, activating }} />
     {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} />
-      : view === 'flows' ? <FlowsHome wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} newFlow={() => setNewOpen(true)} />
       : view === 'mobile'
       ? <MobileDemo e={eng} api={api} wfs={wfs} width={width} ver={ver} />
       : <div className={cls('work', mode === 'play' && 'is-play')}>
@@ -331,7 +346,7 @@ function App() {
 }
 
 /* ------------------------------------------------------------------ Top bar */
-function TopBar({ collab, setCollab, people, setPeople, review, setReview, say, newFlow, view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct }) {
+function TopBar({ collab, setCollab, people, setPeople, review, setReview, say, newFlow, view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct, activate, deactivate, activating }) {
   const root = wfs[rootId]; const bad = checks.filter((c) => !c.ok).length;
   const stop = (e) => e.stopPropagation();
   return <header className="top" onClick={stop}>
@@ -339,7 +354,6 @@ function TopBar({ collab, setCollab, people, setPeople, review, setReview, say, 
     <div className="logo"><Emblem /><b className="hide-s">Zenko <em>Studio</em></b></div>
     <nav className="views" aria-label="Vue">
       <button className={view === 'dashboard' ? 'on' : ''} onClick={() => setView('dashboard')}><Ic n="grid" s={15} /><span className="hide-s">Tableau de bord</span></button>
-      <button className={view === 'flows' ? 'on' : ''} onClick={() => setView('flows')}><Ic n="list" s={15} /><span className="hide-s">Workflows</span></button>
       <button className={view === 'studio' ? 'on' : ''} onClick={() => setView('studio')}><Ic n="flow" s={15} /><span className="hide-s">Studio</span></button>
       <button className={view === 'mobile' ? 'on' : ''} onClick={() => setView('mobile')}><Ic n="phone" s={15} /><span className="hide-s">App mobile</span></button>
     </nav>
@@ -366,7 +380,7 @@ function TopBar({ collab, setCollab, people, setPeople, review, setReview, say, 
       {collab.on ? <span className="avs">{people.slice(0, 3).map((p) => <Avatar key={p.id} p={p} s={22} />)}</span> : <Ic n="users" s={15} />}{collab.on ? (review !== 'draft' && <span className={cls('chip', review === 'approved' && 'okc')}>{review === 'approved' ? 'Validé' : 'En relecture'}</span>) : <span className="hide-s">Collaborer</span>}{collab.bot && <Ic n="zap" s={13} />}</button>
       {menu === 'collab' && <CollabPop {...{ collab, setCollab, people, setPeople, review, setReview, say }} />}</div>}
     <button className="kbtn" onClick={() => setPal(true)}><Ic n="search" s={14} /><span className="hide-s">Aller à…</span><kbd className="hide-s">{MOD}K</kbd></button>
-    {(view === 'dashboard' || view === 'flows') && <button className="btn pri" onClick={newFlow}><Ic n="plus" s={14} sw={2.4} /><span className="hide-s">Nouveau workflow</span></button>}
+    {view === 'dashboard' && <button className="btn pri" onClick={newFlow}><Ic n="plus" s={14} sw={2.4} /><span className="hide-s">Nouveau workflow</span></button>}
     <button className="ib" onClick={() => setThemeS((theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) ? 'light' : 'dark')} aria-label="Basculer clair / sombre" title="Clair / sombre">{theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? <Ic n="sun" s={16} /> : <Ic n="moon" s={16} />}</button>
     <div className="rel"><button className="ib" onClick={(e) => { stop(e); setMenu(menu === 'view' ? null : 'view'); }} aria-label="Affichage" title="Affichage"><Ic n="sliders" s={16} /></button>
       {menu === 'view' && <div className="pop view-pop" onClick={stop}>
@@ -376,7 +390,19 @@ function TopBar({ collab, setCollab, people, setPeople, review, setReview, say, 
         <div className="pg">Sens du flux</div><Seg value={dir} set={setDir} opts={[['TB', 'Vertical'], ['LR', 'Horizontal']]} />
         <label className="chk"><input type="checkbox" checked={minimap} onChange={(e) => setMinimap(e.target.checked)} />Mini-carte</label>
       </div>}</div>
-    {view === 'studio' && mode === 'edit' && <button className={cls('btn pri', !okAll && 'off')} disabled={!okAll} title={okAll ? 'Activer ce flux' : 'Corrigez les points de contrôle'}>Activer</button>}
+     {view === 'studio' && mode === 'edit' && <div className="rel">
+      {doc.status && doc.status.startsWith('Actif')
+        ? <><button className="btn" onClick={deactivate}><Ic n="edit" s={14} />Modifier</button>
+           <button className={cls('btn ver-active')} onClick={() => setMenu(menu === 'ver' ? null : 'ver')} title="Historique des versions"><Ic n="restart" s={14} />v{(doc.status.match(/v(\d+)/) || ['','?'])[1]} ✓</button></>
+        : <><button className="btn sm" onClick={() => setMenu(menu === 'ver' ? null : 'ver')} title="Historique">{doc.status || 'Brouillon'} <Ic n="down" s={12} /></button>
+           <button className={cls('btn pri', !okAll && 'off', activating && 'activated')} disabled={!okAll} onClick={activate} title={okAll ? 'Activer ce flux en production' : 'Corrigez d’abord les points de contrôle'}><Ic n="zap" s={14} />Activer</button></>}
+      {menu === 'ver' && <div className="pop ver-pop" onClick={(e) => e.stopPropagation()}>
+        <div className="ver-h"><b>Versions</b><span className={cls('chip', doc.status && doc.status.startsWith('Actif') ? 'okc' : '')}>{doc.status || 'Brouillon'}</span></div>
+        {!(doc.history || []).length && <p className="hintp">Aucune version activée pour l’instant.</p>}
+        {[...(doc.history || [])].reverse().map((h, i) => <div key={i} className="ver-row"><span>v{h.v}</span><em>{h.status}</em><span className="mut">{h.ts}</span></div>)}
+        <p className="hintp">Activer crée une version numérotée et la marque comme active. Modifier repasse en brouillon sans perdre l’historique.</p>
+      </div>}
+    </div>}
     {bp === 's' && view === 'studio' && mode === 'edit' && <button className="ib" onClick={() => setDrawer(drawer === 'right' ? null : 'right')} aria-label="Inspecteur"><Ic n="layout" s={18} /></button>}
   </header>;
   function cn(on) { return on ? 'on play' : 'play'; }
@@ -611,35 +637,71 @@ function parseLine(raw) {
 // RECENT → see src/demo.js
 
 function Dashboard({ wfs, openDoc, setView, newFlow }) {
+  const [dtab, setDtab] = React.useState('team');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const max = Math.max(...DAYS); const W = 560, H = 150, bw = W / DAYS.length;
   const tot = DAYS.reduce((a, b) => a + b, 0);
+
+  const teamView = <div className="dgrid">
+    <section className="card c-chart"><h2>Exécutions par jour · équipe</h2>
+      <svg viewBox={`0 0 ${W + 30} ${H + 30}`} role="img" aria-label="Exécutions par jour sur 14 jours">
+        {[0, 0.5, 1].map((t) => <g key={t}><line x1="28" x2={W + 28} y1={H - t * (H - 10)} y2={H - t * (H - 10)} className="gl" /><text x="22" y={H - t * (H - 10) + 4} className="gt" textAnchor="end">{Math.round(max * t)}</text></g>)}
+        {DAYS.map((v, i) => { const h = (v / max) * (H - 10); return <g key={i}><rect x={28 + i * bw + 5} y={H - h} width={bw - 10} height={h} rx="3" className={i === DAYS.length - 3 ? 'bar hi' : 'bar'} /><text x={28 + i * bw + bw / 2} y={H + 16} className="gt" textAnchor="middle">{i < 4 ? 28 + i : i - 3}</text></g>; })}
+      </svg><p className="cap">Octobre → novembre · les week-ends sont creux.</p></section>
+    <section className="card"><h2>Par workflow</h2>
+      {mains.slice(0, 4).map((d, i) => { const n = [312, 229, 0, 0][i] || 0; return <div className="hbar" key={d.id}><span>{d.title}</span><div><i style={{ width: Math.max(4, (n / 312) * 100) + '%' }} /></div><b>{n}</b></div>; })}
+      <h2 className="sp-t">Statuts</h2>
+      <div className="stk"><i style={{ flex: 92, background: 'var(--ok)' }} /><i style={{ flex: 5, background: 'var(--warn)' }} /><i style={{ flex: 3, background: 'var(--err)' }} /></div>
+      <div className="stk-l"><span><i style={{ background: 'var(--ok)' }} />Terminé 92 %</span><span><i style={{ background: 'var(--warn)' }} />En cours 5 %</span><span><i style={{ background: 'var(--err)' }} />Abandonné 3 %</span></div></section>
+    {(() => {
+      const EXECS = [['Inventaire magasin','Carrefour Wavre','Marie D.','Terminé','6 min 12'],['Visite stock hebdo','Carrefour Wavre','Paul M.','Terminé','9 min 40'],['Visite stock hebdo','Carrefour Namur','Sophie L.','En cours','—'],['Entrée de stock','Entrepôt Liège','Cyril R.','En attente de sync','7 min 03'],['Visite stock hebdo','Delhaize Ottignies','Marc T.','Terminé','8 min 51'],['Inventaire magasin','Delhaize Namur','Cyril R.','Terminé','7 min 02'],['Entrée de stock','Entrepôt Liège','Marie D.','Terminé','5 min 44']];
+      const [fWf, setFWf] = React.useState(''); const [fSite, setFSite] = React.useState(''); const [fOp, setFOp] = React.useState(''); const [fSt, setFSt] = React.useState('');
+      const wfs2 = [...new Set(EXECS.map((r) => r[0]))]; const sites = [...new Set(EXECS.map((r) => r[1]))]; const ops = [...new Set(EXECS.map((r) => r[2]))]; const sts = [...new Set(EXECS.map((r) => r[3]))];
+      const rows = EXECS.filter((r) => (!fWf || r[0] === fWf) && (!fSite || r[1] === fSite) && (!fOp || r[2] === fOp) && (!fSt || r[3] === fSt));
+      const sel = (v, s) => v ? <span className="fsel">{v} <button onClick={s}>✕</button></span> : null;
+      return <section className="card c-wide"><div className="card-h"><h2>Dernières exécutions · tous les collaborateurs</h2><span className="mut">{rows.length} / {EXECS.length}</span></div>
+        <div className="tbl"><table><thead><tr>
+          <th><div className="th-f"><span>Workflow</span><select className="flt" value={fWf} onChange={(e) => setFWf(e.target.value)}><option value="">Tous</option>{wfs2.map((x) => <option key={x}>{x}</option>)}</select>{sel(fWf, () => setFWf(''))}</div></th>
+          <th><div className="th-f"><span>Site</span><select className="flt" value={fSite} onChange={(e) => setFSite(e.target.value)}><option value="">Tous</option>{sites.map((x) => <option key={x}>{x}</option>)}</select>{sel(fSite, () => setFSite(''))}</div></th>
+          <th><div className="th-f"><span>Opérateur</span><select className="flt" value={fOp} onChange={(e) => setFOp(e.target.value)}><option value="">Tous</option>{ops.map((x) => <option key={x}>{x}</option>)}</select>{sel(fOp, () => setFOp(''))}</div></th>
+          <th><div className="th-f"><span>Statut</span><select className="flt" value={fSt} onChange={(e) => setFSt(e.target.value)}><option value="">Tous</option>{sts.map((x) => <option key={x}>{x}</option>)}</select>{sel(fSt, () => setFSt(''))}</div></th>
+          <th>Durée</th></tr></thead><tbody>
+          {rows.map((r, i) => <tr key={i} className="tr-link" onClick={() => { setView('studio'); openDoc(mains.find((d) => d.title === r[0])?.id || mains[0]?.id); }}>
+            <td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><span className={'chip ' + (r[3] === 'Terminé' ? 'okc' : r[3] === 'En cours' ? '' : 'warnc')}>{r[3]}</span></td><td className="num">{r[4]}</td></tr>)}
+          {!rows.length && <tr><td colSpan={5} className="empty-row">Aucune exécution pour ces filtres.</td></tr>}
+        </tbody></table></div></section>;
+    })()}
+    <section className="card"><div className="card-h"><h2>À surveiller</h2></div>
+      {mains.map((d) => { const bad = validate(wfs, d).filter((c) => !c.ok); return <button key={d.id} className="watch" onClick={() => { setView('studio'); openDoc(d.id); }}><span className={'dot ' + (bad.length ? 'bad' : 'ok')}>{bad.length ? bad.length : '✓'}</span><span><b>{d.title}</b><em>{bad.length ? bad[0].label : d.status + ' · prêt à activer'}</em></span><Ic n="right" s={14} /></button>; })}
+      <button className="btn block" onClick={newFlow}><Ic n="plus" s={14} />Créer un workflow</button></section>
+  </div>;
+
+  const myView = <div className="dgrid">
+    <section className="card c-wide"><div className="card-h"><h2>Mes tâches assignées</h2><span className="chip">Cyril R.</span></div>
+      <div className="fcards sm mt">
+        {mains.map((d) => { const v = validate(wfs, d).every((c) => c.ok); const f = d.nodes.filter((n) => n.type === 'fork').length; return <button key={d.id} className="fcard" onClick={() => { setView('studio'); openDoc(d.id); }}>
+          <div className="fc-h"><b>{d.title}</b><span className={'chip ' + (d.status.startsWith('Actif') ? 'okc' : '')}>{d.status}</span></div>
+          <em>{d.subtitle}</em>
+          <div className="fc-m"><span>{d.nodes.filter((n) => n.type === 'step').length} étapes</span>{f ? <span className="par"><Ic n="branch" s={12} />{f} parallèle</span> : null}<span>{d.noun}</span></div>
+          <div className="fc-f"><span className={v ? 'okt' : 'badt'}>{v ? '✓ Valide' : '⚠ À corriger'}</span><span className="lnk2">Ouvrir dans le studio →</span></div></button>; })}
+        <button className="fcard new" onClick={newFlow}><span><Ic n="plus" s={22} /></span><b>Nouveau workflow</b><em>Partir de zéro, d’un modèle ou d’une liste d’étapes</em></button>
+      </div></section>
+    <section className="card"><h2>Mes KPIs</h2>
+      {[['Exécutions (moi)', '28', '+4 cette semaine'], ['Taux de complétion', '96 %', '+4 pts vs équipe'], ['Durée médiane', '6 min 44', '−36 s']].map(([l, v, d]) => <div className="kpi sm" key={l}><span>{l}</span><b>{v}</b><em>{d}</em></div>)}
+    </section>
+  </div>;
+
   return <div className="page dash">
-    <header className="pg-h"><div><h1>Tableau de bord</h1><p>Vue d’ensemble de vos workflows et des exécutions terrain. <span className="chip">Données d’exemple</span></p></div></header>
+    <header className="pg-h">
+      <div><h1>Tableau de bord</h1><p>Exécutions terrain et workflows. <span className="chip">Données d'exemple</span></p></div>
+      <div className="seg"><button className={dtab === 'team' ? 'on' : ''} onClick={() => setDtab('team')}><Ic n="users" s={14} />Équipe</button><button className={dtab === 'my' ? 'on' : ''} onClick={() => setDtab('my')}><Ic n="user" s={14} />Mes workflows</button></div>
+    </header>
     <div className="kpis">
-      {[['Exécutions · 14 jours', tot.toLocaleString('fr-FR'), '+12 % vs période précédente', 'up'], ['Taux de complétion', '92 %', '+3 pts', 'up'], ['Durée médiane', '7 min 20', '−45 s', 'up'], ['Gain des branches parallèles', '−38 %', 'vs même flux en séquence', 'up']].map(([l, v, d]) => <div className="kpi" key={l}><span>{l}</span><b>{v}</b><em>{d}</em></div>)}
+      {[['Exécutions · 14 jours', tot.toLocaleString('fr-FR'), '+12 % vs période précédente', 'up'], ['Taux de complétion', '92 %', '+3 pts', 'up'], ['Durée médiane', '7 min 20', '−45 s', 'up'], ['Gain branches parallèles', '−38 %', 'vs séquence', 'up']].map(([l, v, d]) => <div className="kpi" key={l}><span>{l}</span><b>{v}</b><em>{d}</em></div>)}
     </div>
-    <div className="dgrid">
-      <section className="card c-chart"><h2>Exécutions par jour</h2>
-        <svg viewBox={`0 0 ${W + 30} ${H + 30}`} role="img" aria-label="Exécutions par jour sur 14 jours">
-          {[0, 0.5, 1].map((t) => <g key={t}><line x1="28" x2={W + 28} y1={H - t * (H - 10)} y2={H - t * (H - 10)} className="gl" /><text x="22" y={H - t * (H - 10) + 4} className="gt" textAnchor="end">{Math.round(max * t)}</text></g>)}
-          {DAYS.map((v, i) => { const h = (v / max) * (H - 10); return <g key={i}><rect x={28 + i * bw + 5} y={H - h} width={bw - 10} height={h} rx="3" className={i === DAYS.length - 3 ? 'bar hi' : 'bar'} /><text x={28 + i * bw + bw / 2} y={H + 16} className="gt" textAnchor="middle">{i < 4 ? 28 + i : i - 3}</text></g>; })}
-        </svg><p className="cap">Octobre → novembre · les week-ends sont creux.</p></section>
-      <section className="card"><h2>Par workflow</h2>
-        {mains.slice(0, 4).map((d, i) => { const n = [312, 229, 0, 0][i] || 0; return <div className="hbar" key={d.id}><span>{d.title}</span><div><i style={{ width: Math.max(4, (n / 312) * 100) + '%' }} /></div><b>{n}</b></div>; })}
-        <h2 className="sp-t">Statuts</h2>
-        <div className="stk"><i style={{ flex: 92, background: 'var(--ok)' }} /><i style={{ flex: 5, background: 'var(--warn)' }} /><i style={{ flex: 3, background: 'var(--err)' }} /></div>
-        <div className="stk-l"><span><i style={{ background: 'var(--ok)' }} />Terminé 92 %</span><span><i style={{ background: 'var(--warn)' }} />En cours 5 %</span><span><i style={{ background: 'var(--err)' }} />Abandonné 3 %</span></div></section>
-      <section className="card c-wide"><div className="card-h"><h2>Dernières exécutions</h2></div>
-        <div className="tbl"><table><thead><tr><th>Workflow</th><th>Site</th><th>Statut</th><th>Durée</th><th>Mode</th></tr></thead><tbody>
-          {RECENT.map((r, i) => <tr key={i}><td>{r[0]}</td><td>{r[1]}</td><td><span className={'chip ' + (r[2] === 'Terminé' ? 'okc' : '')}>{r[2]}</span></td><td className="num">{r[3]}</td><td>{r[4] ? 'Parallèle · 2 opérateurs' : 'Parallèle · 1 opérateur'}</td></tr>)}</tbody></table></div></section>
-      <section className="card"><div className="card-h"><h2>À surveiller</h2></div>
-        {mains.map((d) => { const bad = validate(wfs, d).filter((c) => !c.ok); return <button key={d.id} className="watch" onClick={() => openDoc(d.id)}><span className={'dot ' + (bad.length ? 'bad' : 'ok')}>{bad.length ? bad.length : '✓'}</span><span><b>{d.title}</b><em>{bad.length ? bad[0].label : d.status + ' · prêt à activer'}</em></span><Ic n="right" s={14} /></button>; })}
-        <button className="btn block" onClick={newFlow}><Ic n="plus" s={14} />Créer un workflow</button></section>
-    </div>
+    {dtab === 'team' ? teamView : myView}
   </div>;
 }
-
 function FlowsHome({ wfs, openDoc, newFlow }) {
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   return <div className="page">
@@ -666,7 +728,7 @@ function NewFlow({ close, create }) {
   return <div className="pal-bg" onMouseDown={close}><div className="modal" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Nouveau workflow">
     <header><h2>Nouveau workflow</h2><button className="ib" onClick={close} aria-label="Fermer"><Ic n="x" s={16} /></button></header>
     <div className="m-b">
-      <div className="row"><Fld l="Nom du workflow"><input id="nf-title" autoFocus className="in" placeholder="Ex. Contrôle chaudière" value={title} onChange={(e) => setTitle(e.target.value)} /></Fld>
+      <div className="row"><Fld l="Nom du workflow"><input id="nf-title" autoFocus className="in" placeholder="Ex. Visite rayon frais" value={title} onChange={(e) => setTitle(e.target.value)} /></Fld>
         <Fld l="Nom côté terrain"><select className="in" value={noun} onChange={(e) => setNoun(e.target.value)}>{['Inventaire', 'Visite', 'Réception', 'Contrôle'].map((x) => <option key={x}>{x}</option>)}</select></Fld></div>
       <div className="tpls" role="radiogroup" aria-label="Point de départ">{tpls.map(([k, t, h]) => <button key={k} role="radio" aria-checked={tpl === k} className={tpl === k ? 'on' : ''} onClick={() => setTpl(k)}><b>{t}</b><em>{h}</em></button>)}</div>
       {tpl === 'text' && <div className="gen"><Fld l="Étapes, une par ligne" help="« Question : choix 1 / choix 2 » crée un choix. Les mots photo, signature, date, scan, GPS, nombre, note sont reconnus."><textarea id="nf-lines" className="in" rows={6} value={lines} onChange={(e) => setLines(e.target.value)} /></Fld>
