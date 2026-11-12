@@ -1,8 +1,23 @@
+/**
+ * app.jsx — Point d'entrée principal. Shell de l'application, état global.
+ *
+ * Organisation des sous-modules :
+ *   src/views/Dashboard.jsx  — Tableau de bord, liste des workflows, assistant de création
+ *   src/views/PlayView.jsx   — Vue Play plein écran + démonstration mobile
+ *   src/views/ParallelView.jsx — Vue côte-à-côte des branches parallèles
+ *   src/editor/Inspector.jsx — Panneau inspecteur (NodeForm, Fld, Tog, Seg)
+ *   src/collab.jsx           — Collaboration, commentaires, assistant workflow
+ *   src/engine.js            — Moteur d'exécution des workflows (threads, fork/join)
+ *   src/data.js              — Modèle de données, layout dagre, branchInfo
+ *   src/ops.js               — Opérations d'édition (insert, delete, fork…)
+ *   src/demo.js              — Données de démonstration (remplacer en production)
+ */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { applyNodeChanges } from 'reactflow';
 import { Emblem } from './logo.jsx';
-import { CollabPop, CommentsTab, AssistantTab, Avatar, PEOPLE0, COMMENTS0, REVIEW_LABEL } from './collab.jsx';
+import { CollabPop, CommentsTab, AssistantTab, Avatar, REVIEW_LABEL } from './collab.jsx';
+import { DAYS, RECENT, PEOPLE0, COMMENTS0 } from './demo.js';
 import { Ic } from './icons.jsx';
 import { expandDoc, usageOf, makeKey, BR, INPUTS, ADD_TYPES, initialDocs, layout, branchInfo, outline, validate, makeNode, nodeOf, outsOf, uid } from './data.js';
 import { createEngine, previewEngine, submit as eSubmit, back as eBack, demoValue, hasValue, fmt } from './engine.js';
@@ -594,8 +609,8 @@ function parseLine(raw) {
   return { type: t, label };
 }
 
-const DAYS = [38, 42, 35, 51, 47, 22, 14, 44, 49, 53, 46, 58, 25, 17];
-const RECENT = [['Inventaire magasin', 'Carrefour Wavre', 'Terminé', '6 min 12', true], ['Visite stock hebdo', 'Carrefour Wavre', 'Terminé', '9 min 40', true], ['Visite stock hebdo', 'Carrefour Namur', 'En cours', '—', true], ['Entrée de stock', 'Entrepôt Liège', 'En attente de sync', '7 min 03', false], ['Visite stock hebdo', 'Delhaize Ottignies', 'Terminé', '8 min 51', false]];
+// DAYS → see src/demo.js
+// RECENT → see src/demo.js
 
 function Dashboard({ wfs, openDoc, setView, newFlow }) {
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');

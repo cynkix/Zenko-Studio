@@ -1,3 +1,18 @@
+/**
+ * data.js — Modèle de données, mise en page et helpers de graph.
+ *
+ * Structure d'un document (workflow ou sous-routine) :
+ *   { id, kind ('main'|'sub'), title, noun, status, subtitle?,
+ *     nodes: Node[], edges: Edge[] }
+ *
+ * Types de nœuds : start | end | step | loop | fork | join
+ *   - step  : écran de saisie ou d'information (data.kind = 'input'|'info'|'summary')
+ *   - loop  : boucle sur une liste, appelle une sous-routine par élément
+ *   - fork  : nœud de divergence — crée N branches parallèles
+ *   - join  : nœud de convergence — attend la fin de toutes les branches du fork associé
+ *
+ * @module data
+ */
 import dagre from 'dagre';
 
 export const uid = (p = 'n') => p + Math.random().toString(36).slice(2, 8);
@@ -154,6 +169,17 @@ export const nodeOf = (d, id) => d.nodes.find((n) => n.id === id);
 export const startOf = (d) => d.nodes.find((n) => n.type === 'start');
 
 /* show a sub-routine in place: its steps become read-only "ghost" nodes chained after the loop node */
+/**
+ * Insère les étapes d'une sous-routine "à la place" du nœud de boucle dans le graphe,
+ * pour permettre l'affichage déplié sur le canvas principal.
+ * Les nœuds insérés sont marqués _ghost: true et sont en lecture seule.
+ *
+ * @param {Object} d       - Document principal.
+ * @param {Object} wfs     - Dictionnaire de tous les documents.
+ * @param {Function} isOpen - (nodeId: string) => boolean — indique si ce nœud est déplié.
+ * @param {string} dir     - Direction de mise en page ('TB'|'LR').
+ * @returns {{ nodes, edges, ghostOf }}  ghostOf[loopId] = [ghostNodeIds]
+ */
 export function expandDoc(d, wfs, isOpen, dir) {
   const loops = d.nodes.filter((n) => n.type === 'loop' && isOpen(n.id) && wfs[n.data.run]);
   if (!loops.length) return { nodes: d.nodes, edges: d.edges, ghostOf: {} };
@@ -171,9 +197,25 @@ export function expandDoc(d, wfs, isOpen, dir) {
   });
   return { nodes: layout(ns, es, dir), edges: es, ghostOf };
 }
+/**
+ * Compte les usages d'une sous-routine dans tous les workflows.
+ * @param {Object} wfs   - Dictionnaire de tous les documents.
+ * @param {string} subId - Id de la sous-routine à chercher.
+ * @returns {{ uses: number, docs: number }}  uses = nombre d'occurrences, docs = nombre de workflows distincts.
+ */
 export const usageOf = (wfs, subId) => { let uses = 0; const docs = new Set(); Object.values(wfs).forEach((w) => w.nodes.forEach((n) => { if (n.type === 'loop' && n.data.run === subId) { uses++; docs.add(w.id); } })); return { uses, docs: docs.size }; };
 
 /* branch membership (nested forks allowed): byNode[id] = innermost branch + tag; paths[id] = outer -> inner */
+/**
+ * Calcule l'appartenance de chaque nœud à une branche parallèle.
+ * Gère l'imbrication (fork dans une branche d'un fork parent).
+ *
+ * @param {Object} d - Document (workflow).
+ * @returns {{ byNode: Object, forks: Array, paths: Object }}
+ *   byNode[id] = { forkId, idx, branchId, label, tag, path }  — branche la plus imbriquée
+ *   forks      = liste des blocs parallèles avec leurs branches et leur profondeur
+ *   paths[id]  = chemin complet de branches (outer → inner)
+ */
 export function branchInfo(d) {
   const byNode = {}; const forks = []; const paths = {};
   const letters = (p) => p.map((x) => BR[x.idx].letter).join('·');
@@ -213,6 +255,11 @@ export function edgeDepth(d, e, info) {
 }
 
 /* reading-order outline with branch indentation */
+/**
+ * Parcours linéaire du graphe (DFS) pour produire la liste du plan du workflow.
+ * @param {Object} d - Document.
+ * @returns {Array<{ n: Node, depth: number, br: BranchInfo|null }>}
+ */
 export function outline(d) {
   const rows = []; const start = startOf(d);
   const walk = (id, depth, br, stop) => {
@@ -233,6 +280,12 @@ export function outline(d) {
   return rows;
 }
 
+/**
+ * Valide un document et retourne la liste des points de contrôle.
+ * @param {Object} wfs - Dictionnaire de tous les documents (pour vérifier les sous-routines).
+ * @param {Object} d   - Document à valider.
+ * @returns {Array<{ label: string, ok: boolean }>}
+ */
 export function validate(wfs, d) {
   const out = []; const ok = (o, label) => out.push({ ok: o, label });
   const start = startOf(d); const end = d.nodes.find((n) => n.type === 'end');

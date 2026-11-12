@@ -1,7 +1,20 @@
+/**
+ * ops.js — Opérations d'édition sur un document (toutes pures : reçoivent un doc, retournent un doc ou null).
+ * Null signifie que l'opération est interdite (ex. suppression de début/fin, nesting > 2 niveaux).
+ *
+ * @module ops
+ */
 import { uid, nodeOf, outsOf, insOf, branchInfo, edgeDepth, layout, makeKey } from './data.js';
 
 export const relay = (d, dir) => ({ ...d, nodes: layout(d.nodes, d.edges, dir) });
 
+/**
+ * Insère un nœud sur un lien existant.
+ * @param {Object} d      - Document courant.
+ * @param {string} edgeId - Id du lien sur lequel insérer.
+ * @param {Object} node   - Nœud à insérer.
+ * @returns {Object|null} Nouveau document, ou null si impossible.
+ */
 export function insertOnEdge(d, edgeId, node) {
   const i = d.edges.findIndex((x) => x.id === edgeId); if (i < 0) return null;
   const e = d.edges[i];
@@ -12,6 +25,13 @@ export function insertOnEdge(d, edgeId, node) {
   return { ...d, nodes, edges };
 }
 
+/**
+ * Insère un bloc parallèle (fork + join + 2 branches vides) sur un lien.
+ * Limité à 2 niveaux d'imbrication.
+ * @param {Object} d      - Document courant.
+ * @param {string} edgeId - Id du lien cible.
+ * @returns {Object|null} Nouveau document, ou null si déjà 2 niveaux.
+ */
 export function insertFork(d, edgeId) {
   const i = d.edges.findIndex((x) => x.id === edgeId); if (i < 0) return null;
   const e = d.edges[i]; const info = branchInfo(d);
@@ -30,6 +50,13 @@ export function insertFork(d, edgeId) {
   return { d: { ...d, nodes, edges }, focus: A };
 }
 
+/**
+ * Supprime un nœud et recâble les liens.
+ * Refuse start, end et les fork/join (suppression du bloc complet non implémentée).
+ * @param {Object} d  - Document courant.
+ * @param {string} id - Id du nœud à supprimer.
+ * @returns {Object|null} Nouveau document, ou null si refusé.
+ */
 export function deleteNode(d, id) {
   const n = nodeOf(d, id); if (!n || n.type === 'start' || n.type === 'end') return null;
   const info = branchInfo(d); let remove = new Set([id]); let ins, out;

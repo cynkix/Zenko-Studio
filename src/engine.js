@@ -1,3 +1,18 @@
+/**
+ * engine.js — Moteur d'exécution des workflows.
+ *
+ * Modèle d'exécution :
+ *   - Un workflow est un arbre de "threads". Le thread racine suit le flux principal.
+ *   - Un nœud `fork` crée des threads enfants (un par branche) et met le parent en "parked".
+ *   - Un nœud `join` met le thread enfant en "wait". Quand tous les enfants d'un fork
+ *     sont en "wait", settle() réveille le parent qui continue après le join.
+ *   - Un nœud `loop` empile un frame de sous-routine sur le thread courant, avec un
+ *     curseur d'itération sur les éléments de la liste (loop.items / loop.idx).
+ *
+ * Cycle de vie d'un thread : run → (screen) → submit → run → … → done | wait | parked
+ *
+ * @module engine
+ */
 import { BR, uid, nextId, nodeOf, startOf } from './data.js';
 
 const clone = (s) => s.map((f) => ({ ...f, loop: f.loop ? { ...f.loop } : undefined }));
@@ -11,6 +26,12 @@ function mkThread(e, label, idx, parent, stack) {
   return { id: uid('t'), label, color: br ? br.color : 'var(--accent)', letter: br ? br.letter : '', parent, stack, status: 'run', screen: null, hist: [], waitJoin: null };
 }
 
+/**
+ * Crée un moteur d'exécution pour un workflow donné et avance jusqu'au premier écran.
+ * @param {Object} wfs - Dictionnaire de tous les documents (id → doc).
+ * @param {string} rootId - Id du workflow principal à exécuter.
+ * @returns {Object} État du moteur (threads, data, trace, visited, done).
+ */
 export function createEngine(wfs, rootId) {
   const e = { wfs, rootId, data: {}, threads: [], trace: [], visited: new Set(), done: false };
   const root = wfs[rootId];
@@ -21,6 +42,15 @@ export function createEngine(wfs, rootId) {
 }
 
 /* preview: start a lone thread directly on a given step (sub-routines get a sample item) */
+/**
+ * Crée un moteur en mode aperçu, positionné directement sur un nœud donné.
+ * Utilisé par le dock d'aperçu live (grand écran) pour montrer l'écran d'une étape.
+ * @param {Object} wfs - Dictionnaire de tous les documents.
+ * @param {string} docId - Id du document contenant le nœud.
+ * @param {string} nodeId - Id du nœud à afficher.
+ * @param {string} rootId - Id du workflow racine (pour le contexte).
+ * @returns {Object} État du moteur positionné sur l'écran du nœud.
+ */
 export function previewEngine(wfs, docId, nodeId, rootId) {
   const e = { wfs, rootId, data: {}, threads: [], trace: [], visited: new Set(), done: false, preview: nodeId };
   const d = wfs[docId]; const fr = { docId, nodeId };
@@ -102,6 +132,12 @@ export function settle(e) {
   }
 }
 
+/**
+ * Valide l'écran courant d'un thread et avance au suivant.
+ * Enregistre les données saisies et déclenche settle() après chaque avance.
+ * @param {Object} e - État du moteur.
+ * @param {Object} t - Thread à faire avancer.
+ */
 export function submit(e, t) {
   if (!t.screen || t.screen.complete) return;
   const f = top(t); const d = e.wfs[f.docId]; const n = nodeOf(d, f.nodeId);
@@ -113,6 +149,12 @@ export function submit(e, t) {
   settle(e);
 }
 
+/**
+ * Revient à l'écran précédent d'un thread en restaurant le stack sauvegardé.
+ * Ne supprime pas les données déjà saisies.
+ * @param {Object} e - État du moteur.
+ * @param {Object} t - Thread à faire reculer.
+ */
 export function back(e, t) {
   if (!t.hist.length) return;
   t.stack = t.hist.pop(); t.screen = null; t.status = 'run'; t.waitJoin = null; e.done = false;
@@ -152,6 +194,12 @@ export function demoValue(e, view) {
 }
 
 /* rough "steps left" for a progress bar */
+/**
+ * Calcule la progression (0–100) d'un thread dans son parcours.
+ * @param {Object} e - État du moteur.
+ * @param {Object} t - Thread à mesurer.
+ * @returns {number} Pourcentage de complétion (0–100).
+ */
 export function progressOf(e, t) {
   const done = t.hist.length;
   const count = (d, from, stopAt) => {

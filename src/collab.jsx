@@ -1,17 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Ic } from './icons.jsx';
-import { nodeOf, outsOf } from './data.js';
+import { nodeOf } from './data.js';
+import { PEOPLE0, COMMENTS0 } from './demo.js';
 
 const cls = (...a) => a.filter(Boolean).join(' ');
 export const ROLES = { owner: 'Propriétaire', edit: 'Éditeur', comment: 'Commentateur', view: 'Lecteur' };
-export const PEOPLE0 = [
-  { id: 'me', name: 'Vous', mail: 'cyril.renault@zenika.com', role: 'owner', tone: 'var(--accent)' },
-  { id: 'marie', name: 'Marie Dupont', mail: 'marie.dupont@client.com', role: 'comment', tone: 'var(--ba)', client: true, online: true },
-];
-export const COMMENTS0 = {
-  'stock_in:nsku': [{ id: 'c1', who: 'marie', text: 'On peut garder 1 par défaut, mais masquer ce champ pour les produits simples ?', at: '09:42', done: false }],
-  'stock_in:loc': [{ id: 'c2', who: 'marie', text: 'L’emplacement doit rester facultatif (option « Ignorer »).', at: '09:47', done: true }],
-};
+// PEOPLE0 → see src/demo.js
+// COMMENTS0 → see src/demo.js
 export const REVIEW_LABEL = { draft: 'Brouillon', review: 'En relecture client', approved: 'Validé par le client' };
 
 export const Avatar = ({ p, s = 26 }) => <span className="av" style={{ '--t': p.tone, width: s, height: s }} title={`${p.name} · ${ROLES[p.role]}`}>{p.name.split(' ').map((x) => x[0]).slice(0, 2).join('')}{p.online && <i />}</span>;
