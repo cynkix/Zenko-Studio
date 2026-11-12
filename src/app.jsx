@@ -783,8 +783,10 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin }) {
       <section className="card c-chart"><div className="card-h"><h2>Exécutions par jour</h2><b className="tot">{P.tot.toLocaleString('fr-FR')} exécutions</b></div>
         <p className="sub">{mode === 'day' ? 'Activité de l’équipe heure par heure.' : mode === 'year' ? 'Activité de l’équipe sur les 12 derniers mois.' : `Activité de l’équipe sur les ${lenTxt.replace(' jours', '')} derniers jours.`}</p>
         <svg viewBox={`0 0 ${W + 40} ${H + 34}`} role="img" aria-label="Exécutions sur la période">
+          <defs><linearGradient id="barG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style={{ stopColor: 'var(--accent)', stopOpacity: 0.92 }} /><stop offset="1" style={{ stopColor: 'var(--accent)', stopOpacity: 0.38 }} /></linearGradient>
+            <linearGradient id="barH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style={{ stopColor: 'var(--accent)', stopOpacity: 1 }} /><stop offset="1" style={{ stopColor: 'var(--accent)', stopOpacity: 0.6 }} /></linearGradient></defs>
           {[0, 0.5, 1].map((t) => <g key={t}><line x1="36" x2={W + 36} y1={H - t * (H - 24)} y2={H - t * (H - 24)} className="gl" /><text x="28" y={H - t * (H - 24) + 4} className="gt" textAnchor="end">{Math.round(top * t)}</text></g>)}
-          {P.vals.map((v, i) => { const h = (v / top) * (H - 24); const hi = v === max; return <g key={i}><rect x={36 + i * bw + bw * 0.14} y={H - h} width={bw * 0.72} height={h} rx="3" className={hi ? 'bar hi' : 'bar'} />
+          {P.vals.map((v, i) => { const h = (v / top) * (H - 24); const hi = v === max; return <g key={`${mode}-${off}-${i}`}><rect style={{ '--i': i }} x={36 + i * bw + bw * 0.14} y={H - h} width={bw * 0.72} height={h} rx="3" className={hi ? 'bar hi' : 'bar'} />
             {(showVal || hi) && <text x={36 + i * bw + bw / 2} y={H - h - 6} className={hi ? 'gt hi' : 'gt'} textAnchor="middle">{v}</text>}
             {(P.N <= 14 || i % 3 === 0) && <text x={36 + i * bw + bw / 2} y={H + 20} className="gt" textAnchor="middle">{P.labels[i]}</text>}</g>; })}
         </svg><p className="cap">{mode === 'year' ? 'Saisonnalité : pic en fin d’année.' : (mode === 'day' ? 'Pic en milieu de matinée.' : 'Les week-ends sont creux.')}</p></section>

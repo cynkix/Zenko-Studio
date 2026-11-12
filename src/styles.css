@@ -571,3 +571,16 @@ h3.sp-t { font: 700 13px var(--f-disp); margin: 22px 0 10px; padding-top: 14px; 
 @media (min-width: 1000px) { .top.v-dashboard .views, .top.v-mobile .views { position: absolute; left: 50%; transform: translateX(-50%); } }
 @media (max-width: 1700px) { .top.v-studio .views button span { display: none; } .top.v-studio .views button { padding: 6px 9px; } }
 .top .rel { display: flex; align-items: center; gap: 8px; flex: none; }
+
+/* dégradé + micro-animations des barres */
+.c-chart .bar { fill: url(#barG); transform-box: fill-box; transform-origin: 50% 100%; animation: barIn .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i, 0) * 28ms); transition: filter .15s; }
+.c-chart .bar.hi { fill: url(#barH); } .c-chart .bar:hover { filter: brightness(1.12); }
+.c-chart .gt { animation: fadeUp .5s ease both; animation-delay: .35s; }
+@keyframes barIn { from { transform: scaleY(0); opacity: .2; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes fadeUp { from { opacity: 0; } to { opacity: 1; } }
+.hbar > div > i, .stk i { background-image: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, transparent)); transition: width .6s cubic-bezier(.2,.8,.2,1); animation: growX .8s cubic-bezier(.2,.8,.2,1) both; transform-origin: left; }
+.stk i { background-image: linear-gradient(90deg, rgba(255,255,255,.0), rgba(255,255,255,.18)); }
+@keyframes growX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .c-chart .bar, .c-chart .gt, .hbar > div > i, .stk i { animation: none; transition: none; } }
+.card .hbar > div > i { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--accent)); }
+.card .stk > i { background-image: none; }
