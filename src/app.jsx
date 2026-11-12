@@ -356,7 +356,9 @@ function TopBar({ collab, setCollab, people, setPeople, review, setReview, say, 
     </>}
     <div className="sp" />
     {view === 'studio' && mode === 'edit' && <>
-      <span className={cls('pill', okAll ? 'ok' : 'bad', 'hide-s')} onClick={() => { setInspTab('check'); setDrawer('right'); }} role="button" tabIndex={0}><Ic n={okAll ? 'check' : 'alert'} s={13} sw={2.4} />{okAll ? 'Valide' : `${bad} point(s)`}</span>
+      <div className="rel"><span className={cls('pill', okAll ? 'ok' : 'bad', 'hide-s')} onClick={() => setMenu(menu === 'checks' ? null : 'checks')} role="button" tabIndex={0}><Ic n={okAll ? 'check' : 'alert'} s={13} sw={2.4} />{okAll ? 'Valide' : `${bad} point(s)`}</span>
+        {menu === 'checks' && <div className="pop checks-pop" onClick={(e) => e.stopPropagation()}>{checks.map((c, i) => <div key={i} className={cls('ck', c.ok ? 'ok' : 'bad')}><Ic n={c.ok ? 'check' : 'alert'} s={14} sw={2.4} /><span>{c.label}</span></div>)}<p className="hintp">Le flux ne peut être activé que si tous les points sont verts.</p></div>}
+      </div>
       <button className="ib hide-s" onClick={undo} disabled={!hist.past.length} title={`Annuler (${MOD}Z)`}><Ic n="undo" s={16} /></button>
       <button className="ib hide-s" onClick={redo} disabled={!hist.future.length} title="Rétablir"><Ic n="redo" s={16} /></button>
     </>}
@@ -426,29 +428,25 @@ function Tog({ l, v, set }) { return <label className="tog"><input type="checkbo
 function Inspector({ doc, wfs, selNode, info, inspTab: tab0, setInspTab, checks, updateNode, updateDoc, del, edit, openSub, setSel, setFocus, setDual, openPar, hasFork, collab, comments, setComments, people, addStep, say, detachSub }) {
   const bad = checks.filter((c) => !c.ok).length;
   const nOpen = collab.on ? doc.nodes.reduce((s, n) => s + (comments[`${doc.id}:${n.id}`] || []).filter((c) => !c.done).length, 0) : 0;
-  const tabs = [['step', 'Étape'], ['flow', 'Flux'], ...(collab.on ? [['comments', 'Commentaires']] : []), ...(collab.bot ? [['bot', 'Assistant']] : []), ['check', 'Contrôles']];
+  const tabs = [['step', 'Étape'], ...(collab.on ? [['comments', 'Commentaires']] : []), ...(collab.bot ? [['bot', 'Assistant']] : [])];
   const inspTab = tabs.some(([k]) => k === tab0) ? tab0 : 'step';
   return <div className="insp-in">
     <div className="stabs" role="tablist">
       {tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={inspTab === k} className={inspTab === k ? 'on' : ''} onClick={() => setInspTab(k)}>{l}{k === 'comments' && nOpen > 0 && <i className="dot bad">{nOpen}</i>}{k === 'check' && <i className={cls('dot', bad ? 'bad' : 'ok')}>{bad || '✓'}</i>}</button>)}
     </div>
     <div className="insp-scroll">
-      {inspTab === 'step' && (selNode ? <NodeForm {...{ doc, wfs, n: selNode, info, updateNode, del, edit, openSub, setDual, openPar, detachSub }} /> : <div className="empty"><Ic n="flow" s={28} /><b>Sélectionnez une étape</b><p>Cliquez sur un nœud du canvas ou du plan pour l’éditer. Survolez un lien et cliquez sur <b>+</b> pour insérer une étape.</p>{hasFork && <button className="btn" onClick={() => setDual(true)}><Ic n="columns" s={15} />Voir les branches côte à côte</button>}</div>)}
+      {inspTab === 'step' && (selNode ? <NodeForm {...{ doc, wfs, n: selNode, info, updateNode, del, edit, openSub, setDual, openPar, detachSub }} /> : <><div className="empty"><Ic n="flow" s={28} /><b>Sélectionnez une étape</b><p>Cliquez sur un nœud du canvas ou du plan pour l’éditer. Survolez un lien et cliquez sur <b>+</b> pour insérer une étape.</p>{hasFork && <button className="btn" onClick={() => setDual(true)}><Ic n="columns" s={15} />Voir les branches côte à côte</button>}
+          </div><div className="flow-info">
+            <Fld l={doc.kind === 'sub' ? 'Nom de la sous-routine' : 'Titre du flux'}><input className="in" value={doc.title} onChange={(e) => updateDoc({ title: e.target.value })} /></Fld>
+            {doc.kind === 'main' && <><Fld l="Sous-titre"><input className="in" value={doc.subtitle || ''} onChange={(e) => updateDoc({ subtitle: e.target.value })} /></Fld>
+              <Fld l="Nom terrain" help="Affiché dans l’app mobile."><select className="in" value={doc.noun} onChange={(e) => updateDoc({ noun: e.target.value })}>{[' Inventaire', 'Visite', 'Réception', 'Contrôle'].map((x) => <option key={x}>{x}</option>)}</select></Fld></>}
+            {doc.kind === 'sub' && <Fld l="Paramètre reçu"><input className="in mono" value={doc.param} onChange={(e) => updateDoc({ param: e.target.value })} /></Fld>}
+            <div className="stats"><div><b>{doc.nodes.filter((n) => n.type === 'step').length}</b><span>étapes</span></div><div><b>{doc.nodes.filter((n) => n.type === 'loop').length}</b><span>boucles</span></div><div><b>{doc.nodes.filter((n) => n.type === 'fork').length}</b><span>parallèles</span></div></div>
+          </div></>)}
       {inspTab === 'comments' && <CommentsTab {...{ doc, sel: selNode && selNode.id, setSel, comments, setComments, people, can: true }} />}
       {inspTab === 'bot' && <AssistantTab {...{ doc, checks, addStep, say }} />}
-      {inspTab === 'flow' && <div>
-        <Fld l={doc.kind === 'sub' ? 'Nom de la sous-routine' : 'Titre du flux'}><input className="in" value={doc.title} onChange={(e) => updateDoc({ title: e.target.value })} /></Fld>
-        {doc.kind === 'main' && <><Fld l="Sous-titre"><input className="in" value={doc.subtitle || ''} onChange={(e) => updateDoc({ subtitle: e.target.value })} /></Fld>
-          <Fld l="Nom donné à la tâche côté terrain" help="Affiché dans l’app mobile."><select className="in" value={doc.noun} onChange={(e) => updateDoc({ noun: e.target.value })}>{['Inventaire', 'Visite', 'Réception', 'Contrôle'].map((x) => <option key={x}>{x}</option>)}</select></Fld></>}
-        {doc.kind === 'sub' && <Fld l="Paramètre reçu" help="Les textes peuvent l’utiliser avec {paramètre}."><input className="in mono" value={doc.param} onChange={(e) => updateDoc({ param: e.target.value })} /></Fld>}
-        <div className="stats">
-          <div><b>{doc.nodes.filter((n) => n.type === 'step').length}</b><span>étapes</span></div>
-          <div><b>{doc.nodes.filter((n) => n.type === 'loop').length}</b><span>boucles</span></div>
-          <div><b>{doc.nodes.filter((n) => n.type === 'fork').length}</b><span>parallèles</span></div>
-        </div>
-      </div>}
-      {inspTab === 'check' && <div className="checks">{checks.map((c, i) => <div key={i} className={cls('ck', c.ok ? 'ok' : 'bad')}><Ic n={c.ok ? 'check' : 'alert'} s={14} sw={2.4} /><span>{c.label}</span></div>)}
-        <p className="hintp">Le flux ne peut être activé que si tous les points sont verts.</p></div>}
+
+
     </div>
   </div>;
 }
