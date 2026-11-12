@@ -721,6 +721,15 @@ function MobileDemo({ e, api, wfs, width, ver, assigns, datasets }) {
   </div>;
 }
 
+function parseLine(raw) {
+  const s = raw.trim(); const n = s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  let label = s, options;
+  const m = s.match(/^(.*?)\s*:\s*(.+\/.+)$/);
+  if (m) { label = m[1]; options = m[2].split('/').map((x) => x.trim()).filter(Boolean); return { type: /plusieurs|multiple/.test(n) ? 'multi' : 'single', label, options }; }
+  const t = /signature|signer/.test(n) ? 'signature' : /photo|image/.test(n) ? 'photo' : /scan|code.?barre|qr/.test(n) ? 'code' : /gps|position|localis/.test(n) ? 'geo' : /date/.test(n) ? 'date' : /note|etoile|satisfaction/.test(n) ? 'stars' : /combien|nombre|quantite|releve|compteur|mesure/.test(n) ? 'number' : /niveau|proprete|pourcent/.test(n) ? 'slider' : 'text';
+  return { type: t, label };
+}
+
 /* ---- Tableau de bord : génération de données d’exemple (déterministe) ---- */
 const END0 = new Date(2026, 10, 10); // fin de la période d’exemple : 10 nov. 2026
 const rnd = (seed) => { let x = Math.sin(seed * 9301 + 49297) * 233280; return x - Math.floor(x); };
