@@ -734,40 +734,54 @@ function parseLine(raw) {
 const TS = { assigned: 'Assigné', progress: 'En cours', done: 'Terminé' };
 const dueTxt = (n) => (n < 0 ? 'En retard' : n === 0 ? 'Aujourd’hui' : n === 1 ? 'Demain' : `Dans ${n} jours`);
 function MyTasks({ wfs, tasks, setTasks, openDoc, setView }) {
-  const [q, setQ] = React.useState(''); const [wfF, setWfF] = React.useState(''); const [lay, setLay] = React.useState('board');
+  const [q, setQ] = React.useState(''); const [wfF, setWfF] = React.useState(''); const [siteF, setSiteF] = React.useState(''); const [lay, setLay] = React.useState('board');
+  const [stF, setStF] = React.useState('all'); // all | assigned | progress | done | sync | late
+  const [busy, setBusy] = React.useState([]);
   const mains = Object.values(wfs).filter((d) => d.kind === 'main'); const title = (t) => (wfs[t.wf] ? wfs[t.wf].title : t.wf);
-  const list = tasks.filter((t) => (!wfF || t.wf === wfF) && (!q.trim() || (title(t) + ' ' + t.site).toLowerCase().includes(q.trim().toLowerCase())));
+  const sites = [...new Set(tasks.map((t) => t.site))];
+  const isLate = (t) => t.status !== 'done' && t.due < 0; const isPend = (t) => t.status === 'done' && t.sync !== 'synced';
+  const byStF = { all: () => true, assigned: (t) => t.status === 'assigned', progress: (t) => t.status === 'progress', done: (t) => t.status === 'done', sync: isPend, late: isLate };
+  const list = tasks.filter((t) => (!wfF || t.wf === wfF) && (!siteF || t.site === siteF) && byStF[stF](t) && (!q.trim() || (title(t) + ' ' + t.site).toLowerCase().includes(q.trim().toLowerCase())));
   const col = (st) => list.filter((t) => t.status === st).sort((a, b) => a.due - b.due);
-  const move = (id, patch) => setTasks(tasks.map((t) => (t.id === id ? { ...t, fresh: false, ...patch } : t)));
-  const late = tasks.filter((t) => t.status !== 'done' && t.due < 0).length;
-  const kp = [['À faire', tasks.filter((t) => t.status === 'assigned').length, 'assignées'], ['En cours', tasks.filter((t) => t.status === 'progress').length, 'démarrées'], ['Terminées', tasks.filter((t) => t.status === 'done').length, 'cette semaine'], ['En retard', late, late ? 'à traiter' : 'aucune']];
-  const Card = ({ t }) => { const lt = t.status !== 'done' && t.due < 0; return <div className={cls('tk', lt && 'late')}>
+  const move = (id, patch) => setTasks((all) => all.map((t) => (t.id === id ? { ...t, fresh: false, ...patch } : t)));
+  const pend = tasks.filter(isPend); const late = tasks.filter(isLate).length;
+  const syncIds = (ids) => { setBusy((b) => [...b, ...ids]); setTimeout(() => { setTasks((all) => all.map((t) => (ids.includes(t.id) ? { ...t, sync: 'synced' } : t))); setBusy((b) => b.filter((x) => !ids.includes(x))); }, 1000); };
+  const active = q || wfF || siteF || stF !== 'all'; const reset = () => { setQ(''); setWfF(''); setSiteF(''); setStF('all'); };
+  const kp = [['assigned', 'À faire', tasks.filter(byStF.assigned).length, 'assignées'], ['progress', 'En cours', tasks.filter(byStF.progress).length, 'démarrées'], ['done', 'Terminées', tasks.filter(byStF.done).length, 'cette semaine'], ['sync', 'À synchroniser', pend.length, pend.length ? 'en attente d’envoi' : 'tout est envoyé'], ['late', 'En retard', late, late ? 'à traiter' : 'aucune']];
+  const SyncBtn = ({ t }) => busy.includes(t.id) ? <span className="chip warnc syncing"><i className="spin" />Synchronisation…</span> : <button className="btn sm pri" onClick={() => syncIds([t.id])}>Synchroniser</button>;
+  const Card = ({ t }) => { const lt = isLate(t); return <div className={cls('tk', lt && 'late')}>
     <div className="tk-h"><b>{title(t)}</b>{t.fresh && <span className="chip newc">Nouveau</span>}</div>
     <span className="tk-s">{t.site}</span>
     {t.status === 'progress' && <div className="tk-p"><div className="pr-b"><i style={{ width: t.p + '%' }} /></div><span>{t.p} %</span></div>}
-    <div className="tk-m"><span className={lt ? 'bad' : ''}>{t.status === 'done' ? (t.sync === 'synced' ? 'Synchronisé' : 'À synchroniser') : dueTxt(t.due)}</span><span>par {t.by}</span></div>
+    <div className="tk-m"><span className={lt ? 'bad' : isPend(t) ? 'warnt' : ''}>{t.status === 'done' ? (t.sync === 'synced' ? '✓ Synchronisé' : 'À synchroniser') : dueTxt(t.due)}</span><span>par {t.by}</span></div>
     <div className="tk-a">
       {t.status === 'assigned' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'progress', p: 10 })}>Démarrer</button>}
       {t.status === 'progress' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'done', p: 100, sync: 'pending' })}>Terminer</button>}
-      {t.status === 'done' && t.sync !== 'synced' && <button className="btn sm" onClick={() => move(t.id, { sync: 'synced' })}>Marquer synchronisé</button>}
+      {isPend(t) && <SyncBtn t={t} />}
       {t.status !== 'done' && <button className="lnk" onClick={() => setView('mobile')}>Ouvrir sur mobile</button>}
       <button className="lnk" onClick={() => openDoc(t.wf)}>Voir le workflow</button></div></div>; };
   return <>
     <p className="sub mt-sub">Vos tâches terrain : un workflow assigné à un site, avec une échéance. Les workflows eux-mêmes se gèrent dans l’onglet Équipe et dans le Studio.</p>
-    <div className="kpis">{kp.map(([l, v, d]) => <div className={cls('kpi', l === 'En retard' && v > 0 && 'warn')} key={l}><span className="kl">{l}</span><b>{v}</b><em className="kd">{d}</em></div>)}</div>
+    <div className="kpis kpis5">{kp.map(([k, l, v, d]) => <button className={cls('kpi', 'kbtn2', k === 'late' && v > 0 && 'warn', stF === k && 'sel')} key={k} onClick={() => setStF(stF === k ? 'all' : k)} aria-pressed={stF === k} title="Filtrer"><span className="kl">{l}</span><b>{v}</b><em className="kd">{d}</em></button>)}</div>
     <section className="card tkb">
       <div className="tk-bar">
         <input className="in" placeholder="Rechercher une tâche ou un site…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="fsl" value={wfF} onChange={(e) => setWfF(e.target.value)}><option value="">Tous les workflows</option>{mains.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</select>
+        <select className="fsl" value={wfF} onChange={(e) => setWfF(e.target.value)} aria-label="Workflow"><option value="">Tous les workflows</option>{mains.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</select>
+        <select className="fsl" value={siteF} onChange={(e) => setSiteF(e.target.value)} aria-label="Site"><option value="">Tous les sites</option>{sites.map((x) => <option key={x}>{x}</option>)}</select>
         <div className="seg sm lvseg2" role="tablist" aria-label="Affichage"><button role="tab" aria-selected={lay === 'board'} className={lay === 'board' ? 'on' : ''} onClick={() => setLay('board')}>Tableau</button><button role="tab" aria-selected={lay === 'list'} className={lay === 'list' ? 'on' : ''} onClick={() => setLay('list')}>Liste</button></div>
+      </div>
+      <div className="tk-bar2">
+        <div className="wfchips" role="group" aria-label="Filtrer par statut">{[['all', 'Toutes', tasks.length], ['assigned', 'Assigné', tasks.filter(byStF.assigned).length], ['progress', 'En cours', tasks.filter(byStF.progress).length], ['done', 'Terminé', tasks.filter(byStF.done).length], ['sync', 'À synchroniser', pend.length], ['late', 'En retard', late]].map(([k, l, n]) => <button key={k} className={stF === k ? 'on' : ''} onClick={() => setStF(k)}>{l}<i>{n}</i></button>)}</div>
+        <div className="tk-r">{active && <button className="lnk" onClick={reset}>Réinitialiser les filtres</button>}
+          <button className="btn pri sm" disabled={!pend.length || pend.every((t) => busy.includes(t.id))} onClick={() => syncIds(pend.filter((t) => !busy.includes(t.id)).map((t) => t.id))}>Synchroniser tout ({pend.length})</button></div>
       </div>
       {lay === 'board'
         ? <div className="kan">{['assigned', 'progress', 'done'].map((st) => <div key={st} className={'kcol ' + st}><div className="kh"><i />{TS[st]}<em>{col(st).length}</em></div>
             {col(st).map((t) => <Card key={t.id} t={t} />)}{!col(st).length && <p className="k-e">Aucune tâche</p>}</div>)}</div>
         : <div className="tbl"><table><thead><tr><th>Tâche</th><th>Site</th><th>Échéance</th><th>Statut</th><th>Progression</th><th /></tr></thead><tbody>
-          {[...list].sort((a, b) => a.due - b.due).map((t) => { const lt = t.status !== 'done' && t.due < 0; return <tr key={t.id}><td><b>{title(t)}</b>{t.fresh && <span className="chip newc">Nouveau</span>}</td><td>{t.site}</td><td className={lt ? 'bad' : ''}>{t.status === 'done' ? '—' : dueTxt(t.due)}</td>
-            <td><span className={'chip st ' + (t.status === 'done' ? 'okc' : t.status === 'progress' ? 'warnc' : '')}><i />{TS[t.status]}</span></td><td>{t.status === 'assigned' ? '—' : t.p + ' %'}</td>
-            <td className="num">{t.status === 'assigned' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'progress', p: 10 })}>Démarrer</button>}{t.status === 'progress' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'done', p: 100, sync: 'pending' })}>Terminer</button>}{t.status === 'done' && <span className="mut">{t.sync === 'synced' ? 'Synchronisé' : 'À synchroniser'}</span>}</td></tr>; })}
+          {[...list].sort((a, b) => a.due - b.due).map((t) => { const lt = isLate(t); return <tr key={t.id}><td><b>{title(t)}</b>{t.fresh && <span className="chip newc">Nouveau</span>}</td><td>{t.site}</td><td className={lt ? 'bad' : ''}>{t.status === 'done' ? '—' : dueTxt(t.due)}</td>
+            <td><span className={'chip st ' + (t.status === 'done' ? 'okc' : t.status === 'progress' ? 'warnc' : '')}><i />{TS[t.status]}{isPend(t) ? ' · à synchroniser' : t.status === 'done' ? ' · synchronisé' : ''}</span></td><td>{t.status === 'assigned' ? '—' : t.p + ' %'}</td>
+            <td className="num">{t.status === 'assigned' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'progress', p: 10 })}>Démarrer</button>}{t.status === 'progress' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'done', p: 100, sync: 'pending' })}>Terminer</button>}{isPend(t) && <SyncBtn t={t} />}</td></tr>; })}
           {!list.length && <tr><td colSpan={6} className="empty-row">Aucune tâche pour ces filtres.</td></tr>}</tbody></table></div>}
     </section>
   </>;

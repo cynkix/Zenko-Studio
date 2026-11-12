@@ -605,3 +605,9 @@ h3.sp-t { font: 700 13px var(--f-disp); margin: 22px 0 10px; padding-top: 14px; 
 .chip.newc { background: var(--accent); color: var(--accent-fg); border-color: transparent; margin-left: 6px; }
 .k-e { color: var(--mut); font-size: 13px; text-align: center; margin: 14px 0; }
 .tk-a .lnk { font: 600 12.5px var(--f-ui); text-decoration: none; color: var(--mut); background: none; border: 0; padding: 4px 0; cursor: pointer; } .tk-a .lnk:hover { color: var(--accent); text-decoration: underline; }
+
+.kpis5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } @media (max-width: 1100px) { .kpis5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kbtn2 { text-align: left; cursor: pointer; font: inherit; color: inherit; transition: border-color .15s, box-shadow .15s; } .kbtn2:hover { border-color: var(--mut2, #999); } .kbtn2.sel { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+.tk-bar2 { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 14px; } .tk-bar2 .wfchips { margin: 0; } .tk-r { display: flex; gap: 12px; align-items: center; } .tk-r .lnk { font: 600 12.5px var(--f-ui); background: none; border: 0; color: var(--mut); cursor: pointer; } .tk-r .btn:disabled { opacity: .45; }
+.warnt { color: var(--warn); font-weight: 700; }
+.chip.syncing { display: inline-flex; align-items: center; gap: 7px; } .spin { width: 11px; height: 11px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
