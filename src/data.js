@@ -44,9 +44,40 @@ export function layout(nodes, edges, dir = 'TB') {
   g.setGraph({ rankdir: dir, nodesep: dir === 'TB' ? 56 : 30, ranksep: dir === 'TB' ? 54 : 80, marginx: 24, marginy: 24 });
   g.setDefaultEdgeLabel(() => ({}));
   nodes.forEach((n) => { const [w, h] = SIZE[n.type]; g.setNode(n.id, { width: w, height: h }); });
-  edges.forEach((e) => g.setEdge(e.source, e.target, {}, e.id));
+  const forkIds = new Set(nodes.filter((n) => n.type === 'fork').map((n) => n.id));
+  // les liens qui partent d'un fork pèsent plus lourd : chaque branche démarre juste sous le fork (pas de longs fils qui traversent l'autre branche)
+  edges.forEach((e) => g.setEdge(e.source, e.target, { weight: forkIds.has(e.source) ? 6 : 1 }, e.id));
   dagre.layout(g);
-  return nodes.map((n) => { const p = g.node(n.id); const [w, h] = SIZE[n.type]; return { ...n, position: { x: Math.round(p.x - w / 2), y: Math.round(p.y - h / 2) } }; });
+  const pos = {}; nodes.forEach((n) => { const p = g.node(n.id); const [w, h] = SIZE[n.type]; pos[n.id] = { x: p.x - w / 2, y: p.y - h / 2 }; });
+  orderBranches(nodes, edges, pos, dir, dir === 'TB' ? 56 : 30);
+  return nodes.map((n) => ({ ...n, position: { x: Math.round(pos[n.id].x), y: Math.round(pos[n.id].y) } }));
+}
+
+/**
+ * Dagre ne connaît pas l'ordre des branches : A peut se retrouver à droite de B, et les liens se croisent.
+ * On remet chaque bloc parallèle dans l'ordre déclaré (A, B, C… de gauche à droite, ou de haut en bas en LR),
+ * en traitant d'abord les blocs imbriqués (les plus profonds), puis leurs parents.
+ */
+function orderBranches(nodes, edges, pos, dir, gap) {
+  const ax = dir === 'TB' ? 'x' : 'y'; const sz = (n) => SIZE[n.type][dir === 'TB' ? 0 : 1]; const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const forks = nodes.filter((n) => n.type === 'fork' && (n.data.branches || []).length > 1);
+  // région d'une branche : tout ce qui est atteignable depuis son 1er nœud, jusqu'au join de ce fork (exclu)
+  const region = (f, bid) => {
+    const out = new Set(); const q = edges.filter((e) => e.source === f.id && e.sourceHandle === bid).map((e) => e.target);
+    while (q.length) { const id = q.shift(); const n = byId[id]; if (!n || out.has(id) || (n.type === 'join' && n.data.forkId === f.id)) continue; out.add(id); edges.filter((e) => e.source === id).forEach((e) => q.push(e.target)); }
+    return out;
+  };
+  const regs = forks.map((f) => ({ f, sets: f.data.branches.map((b) => region(f, b.id)) }));
+  regs.sort((a, b) => a.sets.reduce((m, x) => m + x.size, 0) - b.sets.reduce((m, x) => m + x.size, 0)); // petits blocs (imbriqués) d'abord
+  regs.forEach(({ sets }) => {
+    const ext = sets.map((set) => { let lo = Infinity, hi = -Infinity; set.forEach((id) => { lo = Math.min(lo, pos[id][ax]); hi = Math.max(hi, pos[id][ax] + sz(byId[id])); }); return { lo, hi }; });
+    if (ext.some((e) => !isFinite(e.lo))) return;
+    const sorted = ext.every((e, i) => i === 0 || (e.lo + e.hi) / 2 >= (ext[i - 1].lo + ext[i - 1].hi) / 2);
+    if (sorted) return;
+    const total = ext.reduce((a, e) => a + (e.hi - e.lo), 0) + gap * (ext.length - 1);
+    const lo0 = Math.min(...ext.map((e) => e.lo)); const hi0 = Math.max(...ext.map((e) => e.hi)); let cur = (lo0 + hi0) / 2 - total / 2;
+    sets.forEach((set, i) => { const dx = cur - ext[i].lo; set.forEach((id) => { pos[id][ax] += dx; }); cur += ext[i].hi - ext[i].lo + gap; });
+  });
 }
 
 const E = (s, t, h) => ({ id: `e_${s}_${t}${h ? '_' + h : ''}`, source: s, target: t, ...(h ? { sourceHandle: h } : {}) });

@@ -90,8 +90,13 @@ function TermNode({ data, type }) {
 const StartNode = (p) => <TermNode {...p} type="start" />;
 const EndNode = (p) => <TermNode {...p} type="end" />;
 
-function PlusEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }) {
-  const [path, lx, ly] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 14 });
+function PlusEdge({ id, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }) {
+  // Le décrochement horizontal se fait près du fork (à la sortie) ou près du join (à l'arrivée) :
+  // un long lien ne traverse ainsi jamais les nœuds de la branche voisine.
+  const st = useStore((s) => (s.nodeInternals.get(source) || {}).type); const tt = useStore((s) => (s.nodeInternals.get(target) || {}).type);
+  const vertical = sourcePosition === Position.Bottom && Math.abs(targetY - sourceY) > 100; const horiz = Math.abs(targetX - sourceX) > 20;
+  const centerY = vertical && horiz ? (tt === 'join' ? targetY - 34 : st === 'fork' ? sourceY + 34 : undefined) : undefined;
+  const [path, lx, ly] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 14, centerY });
   const mk = data && data.mk ? data.mk : 'arr-n';
   return <>
     <BaseEdge id={id} path={path} markerEnd={`url(#${mk})`} style={{ stroke: (data && data.color) || 'var(--edge)', strokeWidth: 2, opacity: data && data.dim ? 0.35 : 1 }} />
