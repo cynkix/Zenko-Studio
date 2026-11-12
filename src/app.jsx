@@ -604,11 +604,11 @@ const mb = (d) => (/Ko/.test(d.size) ? parseFloat(d.size.replace(',', '.')) / 10
 const Sw = ({ on, set, label }) => <button className={cls('mp-sw', on && 'on')} role="switch" aria-checked={on} aria-label={label} onClick={() => set(!on)}><i /></button>;
 
 /** Consultation hors ligne d'un jeu de données importé (recherche plein texte). */
-function DatasetView({ ds, back }) {
+function DatasetView({ ds, back, from }) {
   const [q, setQ] = useState(''); const t = q.trim().toLowerCase();
   const rows = ds.data.filter((r) => !t || r.some((c) => c.toLowerCase().includes(t)));
   return <div className="ph-body mp">
-    <button className="pf-back sm" onClick={back}><Ic n="left" s={14} />Profil</button>
+    <button className="pf-back sm" onClick={back}><Ic n="left" s={14} />{from}</button>
     <div className="mp-me"><div><b>{ds.name}</b><small>{ds.rows.toLocaleString('fr-FR')} lignes · {ds.size} · disponible hors ligne</small></div></div>
     <input className="in" placeholder="Rechercher un produit, un EAN…" value={q} onChange={(e) => setQ(e.target.value)} />
     <div className="ds-tbl">{rows.length ? rows.map((r, i) => <div key={i} className="ds-r"><b>{r[0]}</b><span>{r.slice(1).join(' · ')}</span></div>) : <p className="mp-e">Aucun résultat.</p>}</div>
@@ -619,7 +619,7 @@ function MobileDemo({ e, api, wfs, width, ver, assigns, datasets }) {
   const [scr, setScr] = useState('inbox'); const [tab, setTab] = useState('tasks'); const [cur, setCur] = useState(null);
   const [st, setSt] = useState({}); const [prog, setProg] = useState({}); // st[id] : 'progress' | 'pending' | 'sending' | 'synced'
   const [off, setOff] = useState(true); const [bg, setBg] = useState(true); const [sending, setSending] = useState(false); const [media, setMedia] = useState([]);
-  const [flt, setFlt] = useState('all'); const [sheet, setSheet] = useState(null); const [pick, setPick] = useState([]); const [team, setTeam] = useState(null); const [dsId, setDsId] = useState(null);
+  const [dl, setDl] = useState([]); const [dlp, setDlp] = useState({}); const [flt, setFlt] = useState('all'); const [sheet, setSheet] = useState(null); const [pick, setPick] = useState([]); const [team, setTeam] = useState(null); const [dsId, setDsId] = useState(null);
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const mates = USERS.filter((u) => u.n !== ME);
   const label = (id) => st[id] === 'progress' ? 'progress' : st[id] === 'sending' ? 'sending' : st[id] === 'pending' || st[id] === 'synced' ? 'done' : 'assigned';
@@ -643,7 +643,10 @@ function MobileDemo({ e, api, wfs, width, ver, assigns, datasets }) {
     if (!ids.length || fin.length === ids.length) setSending(false);
   }, [media, st, sending]);
   const queued = media.filter((m) => m.p < 100);
-  const store = datasets.filter((d) => d.pushed).reduce((a, d) => a + mb(d), 0);
+  const onDev = datasets.filter((d) => d.pushed || dl.includes(d.id)); const avail = datasets.filter((d) => !onDev.includes(d));
+  const store = onDev.reduce((a, d) => a + mb(d), 0);
+  const startDl = (id) => { if (off || dlp[id] !== undefined) return; setDlp((x) => ({ ...x, [id]: 0 })); };
+  useEffect(() => { const ids = Object.keys(dlp); if (off || !ids.length) return; const t = setInterval(() => setDlp((x) => { const n = {}; const fin = []; Object.entries(x).forEach(([k, v]) => { if (v + 25 >= 100) fin.push(k); else n[k] = v + 25; }); if (fin.length) setDl((d) => [...d, ...fin]); return n; }), 320); return () => clearInterval(t); }, [dlp, off]);
   const mq = media.filter((m) => m.p < 100).reduce((a, m) => a + mb(m), 0);
   const saisies = Object.values(st).filter((v) => v !== 'synced').length * 0.12;
   const total = store + mq + saisies;
@@ -651,8 +654,8 @@ function MobileDemo({ e, api, wfs, width, ver, assigns, datasets }) {
   const shown = mains.filter((d) => flt === 'all' || label(d.id) === flt);
   const data = e ? Object.entries(e.data).filter(([k]) => !k.startsWith('__')) : [];
   const ds = datasets.find((d) => d.id === dsId);
-  const title = { tasks: 'Mes tâches', sync: 'Synchronisation', profile: ds ? 'Données hors ligne' : 'Profil' }[tab];
-  const sub = tab === 'tasks' ? `${ME} · ${mains.length} tâches` : tab === 'sync' ? (off ? 'Hors ligne' : sending ? 'Envoi en cours…' : 'En ligne') : 'Responsable magasin';
+  const title = { tasks: 'Mes tâches', sync: 'Synchronisation', data: 'Données hors ligne', profile: 'Profil' }[tab];
+  const sub = tab === 'tasks' ? `${ME} · ${mains.length} tâches` : tab === 'sync' ? (off ? 'Hors ligne' : sending ? 'Envoi en cours…' : 'En ligne') : tab === 'data' ? `${onDev.length} jeu${onDev.length > 1 ? 'x' : ''} sur l’appareil · ${store.toFixed(1).replace('.', ',')} Mo` : 'Responsable magasin';
   const STT = { assigned: 'Assigné', progress: 'En cours', done: 'Terminé', sending: 'Synchro…' };
   const threads = e ? e.threads.filter((t) => t.status !== 'parked') : [];
   return <div className="mob">
@@ -693,12 +696,20 @@ function MobileDemo({ e, api, wfs, width, ver, assigns, datasets }) {
             <div className="mp-row"><span><b>Mode hors ligne</b><small>{off ? 'Actif' : 'Désactivé'}</small></span><Sw on={off} set={setOff} label="Mode hors ligne" /></div>
             <div className="mp-row"><span><b>Synchro en arrière-plan</b><small>{bg ? 'Activée' : 'Désactivée'}</small></span><Sw on={bg} set={setBg} label="Synchronisation en arrière-plan" /></div>
             <div className="mp-h">Données hors ligne</div>
-            {datasets.filter((d) => d.pushed).map((d) => <button key={d.id} className="mp-row link" onClick={() => setDsId(d.id)}><span><b>{d.name}</b><small>{d.rows.toLocaleString('fr-FR')} lignes · {d.size} · maj {d.updated}</small></span><Ic n="right" s={14} /></button>)}
-            {!datasets.some((d) => d.pushed) && <p className="mp-e">Aucun jeu de données sur cet appareil. Le studio peut en pousser (Tableau de bord → Jeux de données).</p>}
+            <button className="mp-row link" onClick={() => setTab('data')}><span><b>Catalogues et listes de prix</b><small>{onDev.length} sur l’appareil · {store.toFixed(1).replace('.', ',')} Mo</small></span><Ic n="right" s={14} /></button>
             <div className="mp-row"><b>Version de l’app</b><small>Zenko 1.0 (démo)</small></div>
             <button className="pf-back full" onClick={() => setTab('tasks')}>Se déconnecter</button></div>}
-          {tab === 'profile' && ds && <DatasetView ds={ds} back={() => setDsId(null)} />}
-          <div className="ph-nav">{[['tasks', 'inbox', 'Tâches'], ['sync', 'restart', 'Synchro'], ['profile', 'user', 'Profil']].map(([k, ic, l]) => <button key={k} className={cls('ph-nav-btn', tab === k && 'active')} onClick={() => { setTab(k); setDsId(null); }}><Ic n={ic} s={20} /><span>{l}</span>{k === 'sync' && (pend.length > 0 || queued.length > 0) && <span className="ph-sync-dot" />}</button>)}</div>
+          {tab === 'data' && !ds && <div className="ph-body mp">
+            <p className="mp-e" style={{ marginTop: 0 }}>Catalogues produits et listes de prix, consultables sans réseau pendant un workflow. Le studio peut aussi les pousser sur l’appareil.</p>
+            <div className="mp-h">Sur l’appareil ({onDev.length})</div>
+            {onDev.map((d) => <button key={d.id} className="mp-row link" onClick={() => setDsId(d.id)}><span><b>{d.name}</b><small>{d.type} · {d.rows.toLocaleString('fr-FR')} lignes · {d.size} · maj {d.updated}</small></span><Ic n="right" s={14} /></button>)}
+            {!onDev.length && <p className="mp-e">Aucun jeu de données sur l’appareil.</p>}
+            <div className="mp-h">Disponibles dans l’espace de travail ({avail.length})</div>
+            {avail.map((d) => <div key={d.id} className="mq"><span className="mq-n"><b>{d.name}</b><small>{d.rows.toLocaleString('fr-FR')} lignes · {d.size}{dlp[d.id] !== undefined ? ` · Téléchargement ${dlp[d.id]} %` : ''}</small></span>{dlp[d.id] !== undefined ? <div className="pr-b"><i style={{ width: dlp[d.id] + '%' }} /></div> : <button className="btn sm pri" disabled={off} onClick={() => startDl(d.id)}>Télécharger</button>}</div>)}
+            {!avail.length && <p className="mp-e">Tout est déjà sur l’appareil.</p>}
+            {off && avail.length > 0 && <p className="mp-hint">Passez en ligne (badge en haut) pour télécharger.</p>}</div>}
+          {tab === 'data' && ds && <DatasetView ds={ds} from="Données" back={() => setDsId(null)} />}
+          <div className="ph-nav">{[['tasks', 'inbox', 'Tâches'], ['data', 'file', 'Données'], ['sync', 'restart', 'Synchro'], ['profile', 'user', 'Profil']].map(([k, ic, l]) => <button key={k} className={cls('ph-nav-btn', tab === k && 'active')} onClick={() => { setTab(k); setDsId(null); }}><Ic n={ic} s={20} /><span>{l}</span>{k === 'sync' && (pend.length > 0 || queued.length > 0) && <span className="ph-sync-dot" />}</button>)}</div>
           {sheet && <div className="pf-sheet" role="dialog" aria-label="Démarrer en équipe"><div className="pf-sheet-in"><b>Démarrer en équipe</b>
             <p>Les branches parallèles de « {wfs[sheet].title} » sont réparties entre vous et vos coéquipiers. Chacun suit sa part, la progression est partagée.</p>
             {mates.map((u) => <label key={u.n} className="mt"><input type="checkbox" checked={pick.includes(u.n)} onChange={(ev) => setPick(ev.target.checked ? [...pick, u.n] : pick.filter((x) => x !== u.n))} /><span><b>{u.n}</b><small>{u.tags.slice(0, 2).join(' · ')}</small></span></label>)}

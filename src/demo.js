@@ -61,4 +61,5 @@ export const PRODUCTS = [
 export const DATASETS0 = [
   { id: 'ds1', name: 'Catalogue produits', type: 'Catalogue produits', cols: ['Produit', 'EAN', 'Rayon', 'Prix'], data: PRODUCTS, rows: 1240, size: '2,4 Mo', updated: '9 nov.', pushed: true, devices: 12 },
   { id: 'ds2', name: 'Liste de prix magasin', type: 'Liste de prix', cols: ['Produit', 'Prix HT', 'TVA'], data: PRODUCTS.map((p) => [p[0], (parseFloat(p[3].replace(',', '.')) / 1.06).toFixed(2).replace('.', ',') + ' €', '6 %']), rows: 860, size: '0,9 Mo', updated: '5 nov.', pushed: true, devices: 12 },
+  { id: 'ds3', name: 'Promotions de novembre', type: 'Liste de prix', cols: ['Produit', 'Prix promo', 'Fin'], data: [['Lait demi-écrémé 1 L', '0,99 €', '30 nov.'], ['Pâtes penne 500 g', '0,89 €', '30 nov.'], ['Café moulu 250 g', '3,49 €', '15 déc.']], rows: 140, size: '0,2 Mo', updated: '10 nov.', pushed: false, devices: 0 },
 ];
