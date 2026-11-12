@@ -792,21 +792,21 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin }) {
         </svg><p className="cap">{mode === 'year' ? 'Saisonnalité : pic en fin d’année.' : (mode === 'day' ? 'Pic en milieu de matinée.' : 'Les week-ends sont creux.')}</p></section>
       <section className="card"><h2>Par workflow</h2><p className="sub">Volume d’exécutions sur la période</p>
         {mains.map((d, i) => <div className="hbar" key={d.id}><span>{d.title}</span><b>{byWf[i].toLocaleString('fr-FR')}</b><div><i style={{ width: Math.max(0, (byWf[i] / Math.max(...byWf)) * 100) + '%' }} /></div></div>)}
-        <h3 className="sp-t">Statuts</h3>
+        <h3 className="sp-t">Statuts des exécutions</h3>
         <div className="stk"><i style={{ flex: 92, background: 'var(--ok)' }} /><i style={{ flex: 5, background: 'var(--warn)' }} /><i style={{ flex: 3, background: 'var(--err)' }} /></div>
         <div className="stk-l"><span><i style={{ background: 'var(--ok)' }} />Terminé 92 %</span><span><i style={{ background: 'var(--warn)' }} />En cours 5 %</span><span><i style={{ background: 'var(--err)' }} />Abandonné 3 %</span></div></section>
       <section className="card c-wide"><h2>Dernières exécutions</h2><p className="sub">Tous les collaborateurs · {rows.length} exécution{rows.length > 1 ? 's' : ''} sur {EXECS.length}</p>
-        <div className="fgrid"><FSel k="wf" label="Workflow" i={0} /><FSel k="site" label="Site" i={1} /><FSel k="op" label="Opérateur" i={2} /><FSel k="st" label="Statut" i={3} /></div>
-        <div className="tbl"><table><thead><tr><th>Workflow</th><th>Site</th><th>Opérateur</th><th>Statut</th><th className="num">Durée</th></tr></thead><tbody>
+        <div className="fgrid"><FSel k="wf" label="Workflow" i={0} /><FSel k="site" label="Site" i={1} /><FSel k="op" label="Opérateur" i={2} /><FSel k="st" label="Exécution" i={3} /></div>
+        <div className="tbl"><table><thead><tr><th>Workflow</th><th>Site</th><th>Opérateur</th><th>Exécution</th><th className="num">Durée</th></tr></thead><tbody>
           {rows.map((r, i) => <tr key={i} className="tr-link" onClick={() => { setView('studio'); openDoc(mains.find((d) => d.title === r[0])?.id || mains[0]?.id); }}>
             <td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><span className={'chip st ' + (r[3] === 'Terminé' ? 'okc' : r[3] === 'En cours' ? '' : 'warnc')}><i />{r[3]}</span></td><td className="num">{r[4]}</td></tr>)}
           {!rows.length && <tr><td colSpan={5} className="empty-row">Aucune exécution pour ces filtres.</td></tr>}
         </tbody></table></div>
         <div className="tfoot"><span>{rows.length} exécutions affichées</span><span>— Exécution en cours</span></div></section>
-      <section className="card c-watch"><h2>À surveiller</h2><p className="sub">{mains.length} workflows · {drafts} brouillon{drafts > 1 ? 's' : ''} prêt{drafts > 1 ? 's' : ''} à activer</p>
+      <section className="card c-watch"><h2>Workflows à surveiller</h2><p className="sub">{mains.length} workflows · {drafts} brouillon{drafts > 1 ? 's' : ''} prêt{drafts > 1 ? 's' : ''} à activer</p>
         {mains.map((d) => { const bad = validate(wfs, d).filter((c) => !c.ok); const act = d.status.startsWith('Actif'); return <button key={d.id} className="watch" onClick={() => { setView('studio'); openDoc(d.id); }}>
           <span className={'wi ' + (act ? 'ok' : 'warn')}><Ic n={act ? 'check' : 'alert'} s={act ? 14 : 20} sw={act ? 3 : 2} /></span>
-          <span className="wt"><b>{d.title}</b><em>{d.status}</em><small className={bad.length ? 'bad' : act ? 'ok' : 'warn'}>{bad.length ? bad[0].label : act ? 'Workflow actif' : 'Prêt à activer'}</small></span><Ic n="right" s={16} /></button>; })}
+          <span className="wt"><b>{d.title}</b><em>{d.status}</em><small className={bad.length ? 'bad' : act ? 'ok' : 'warn'}>{bad.length ? bad[0].label : act ? 'Activé · en production' : 'Prêt à activer'}</small></span><Ic n="right" s={16} /></button>; })}
         <button className="btn pri block lg" onClick={newFlow}>Créer un workflow</button><p className="sub foot">Les brouillons ne génèrent pas d’exécution.</p></section>
     </div>
     <footer className="dfoot"><span>Périmètre : équipe · Tous les sites · Du {fdate(P.start, { day: 'numeric', month: 'long' })} au {fdate(P.end, { day: 'numeric', month: 'long' })}</span><span>Durées exprimées en minutes et secondes</span></footer>
