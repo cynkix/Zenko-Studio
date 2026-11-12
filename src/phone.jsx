@@ -103,11 +103,16 @@ export function Phone({ e, t, api, onDone, header = true }) {
       <div className="ph-ttl"><b>{s && s.item ? s.item : root.title}</b><span>{s && s.item ? root.title : root.subtitle}</span></div>
       {s && s.loopTotal ? <span className="ph-loop">{s.node ? '' : ''}{s.loopIdx}/{s.loopTotal}</span> : null}
       {t.letter && <span className="ph-br">{t.letter}</span>}
+      {onDone && !(s && s.complete) && <button className="ph-pause" onClick={() => setAsk('exit')} aria-label="Quitter le workflow" title="Quitter le workflow"><Ic n="x" s={16} /></button>}
     </div>
     <div className="ph-prog"><i style={{ width: (s && s.complete ? 100 : p) + '%' }} /></div>
     <div className="ph-body">{body}</div>
     {foot && <div className="ph-foot">{foot}</div>}
-    {ask && <div className="pf-sheet" role="alertdialog" aria-label="Confirmer le retour"><div className="pf-sheet-in">
+    {ask === 'exit' && <div className="pf-sheet" role="alertdialog" aria-label="Quitter le workflow"><div className="pf-sheet-in">
+      <b>Quitter ce workflow ?</b><p>Vos réponses sont conservées sur l’appareil. Vous pourrez le reprendre depuis « Mes tâches ».</p>
+      <button className="pf-cta" onClick={() => { setAsk(false); onDone(); }}>Mettre en pause et quitter</button>
+      <button className="pf-back full" onClick={() => setAsk(false)}>Continuer le workflow</button></div></div>}
+    {(ask === true) && <div className="pf-sheet" role="alertdialog" aria-label="Confirmer le retour"><div className="pf-sheet-in">
       <b>Revenir à l’écran précédent ?</b><p>Vos réponses sont conservées. Vous pourrez les modifier puis continuer.</p>
       <button className="pf-cta" onClick={() => { setAsk(false); api.back(t); }}>Oui, revenir</button>
       <button className="pf-back full" onClick={() => setAsk(false)}>Non, rester ici</button></div></div>}
