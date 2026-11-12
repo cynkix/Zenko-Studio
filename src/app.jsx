@@ -17,7 +17,7 @@ import { createRoot } from 'react-dom/client';
 import { applyNodeChanges } from 'reactflow';
 import { Emblem } from './logo.jsx';
 import { CollabPop, CommentsTab, AssistantTab, Avatar, REVIEW_LABEL } from './collab.jsx';
-import { DAYS, RECENT, PEOPLE0, COMMENTS0, USERS, DATASETS0 } from './demo.js';
+import { DAYS, RECENT, PEOPLE0, COMMENTS0, USERS, DATASETS0, TASKS0 } from './demo.js';
 import { AssignModal, DatasetsModal } from './admin.jsx';
 import { Ic } from './icons.jsx';
 import { expandDoc, usageOf, makeKey, BR, INPUTS, ADD_TYPES, initialDocs, layout, branchInfo, outline, validate, makeNode, nodeOf, outsOf, uid } from './data.js';
@@ -63,7 +63,7 @@ function App() {
   const [pal, setPal] = useState(false);
   const [menu, setMenu] = useState(null);
   const [toast, setToast] = useState(null);
-  const [assigns, setAssigns] = useState([]); const [datasets, setDatasets] = useState(DATASETS0); const [adm, setAdm] = useState(null); // adm : 'assign' | 'data' | null
+  const [tasks, setTasks] = useState(TASKS0); const [assigns, setAssigns] = useState([]); const [datasets, setDatasets] = useState(DATASETS0); const [adm, setAdm] = useState(null); // adm : 'assign' | 'data' | null
   const [focus, setFocus] = useState(null);
   const [forkIdx, setForkIdx] = useState(0);
   const [solo, setSolo] = useState(false);
@@ -304,7 +304,7 @@ function App() {
   return <div className={layoutCls} onClick={() => { setMenu(null); }}>
     <Markers />
     <TopBar {...{ collab, setCollab, people, setPeople, review, setReview, say, newFlow: () => setNewOpen(true), view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist: hist.current, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct, activate, deactivate, activating }} />
-    {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} openAdmin={setAdm} />
+    {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} openAdmin={setAdm} tasks={tasks} setTasks={setTasks} />
       : view === 'mobile'
       ? <MobileDemo e={eng} api={api} wfs={wfs} width={width} ver={ver} assigns={assigns} datasets={datasets} />
       : <div className={cls('work', mode === 'play' && 'is-play')}>
@@ -341,7 +341,7 @@ function App() {
         {bp === 's' && drawer && <div className="scrim" onClick={() => setDrawer(null)} />}
       </div>}
     {newOpen && <NewFlow close={() => setNewOpen(false)} create={createFlow} />}
-    {adm === 'assign' && <AssignModal mains={Object.values(wfs).filter((d) => d.kind === 'main')} close={() => setAdm(null)} onAssign={(a) => { setAssigns((x) => [...x, a]); say(`« ${wfs[a.wf].title} » assigné à ${a.members.length} personne(s)`); }} />}
+    {adm === 'assign' && <AssignModal mains={Object.values(wfs).filter((d) => d.kind === 'main')} close={() => setAdm(null)} onAssign={(a) => { setAssigns((x) => [...x, a]); if (a.members.includes('Cyril R.')) setTasks((t) => [{ id: 't' + Date.now(), wf: a.wf, site: 'Carrefour Wavre', due: 0, status: 'assigned', by: a.kind === 'group' ? 'Groupe ' + a.label : 'Responsable', fresh: true }, ...t]); say(`« ${wfs[a.wf].title} » assigné à ${a.members.length} personne(s)`); }} />}
     {adm === 'data' && <DatasetsModal datasets={datasets} setDatasets={setDatasets} close={() => setAdm(null)} say={say} />}
     {addMenu && <AddMenu m={addMenu} close={() => setAddMenu(null)} pick={(t) => { setAddMenu(null); addOnEdge(addMenu.edgeId, t); }} />}
     {pal && <Palette items={commands()} close={() => setPal(false)} />}
@@ -730,6 +730,49 @@ function parseLine(raw) {
   return { type: t, label };
 }
 
+/* ---- « Mes workflows » : tableau de gestion de mes tâches (kanban / liste) ---- */
+const TS = { assigned: 'Assigné', progress: 'En cours', done: 'Terminé' };
+const dueTxt = (n) => (n < 0 ? 'En retard' : n === 0 ? 'Aujourd’hui' : n === 1 ? 'Demain' : `Dans ${n} jours`);
+function MyTasks({ wfs, tasks, setTasks, openDoc, setView }) {
+  const [q, setQ] = React.useState(''); const [wfF, setWfF] = React.useState(''); const [lay, setLay] = React.useState('board');
+  const mains = Object.values(wfs).filter((d) => d.kind === 'main'); const title = (t) => (wfs[t.wf] ? wfs[t.wf].title : t.wf);
+  const list = tasks.filter((t) => (!wfF || t.wf === wfF) && (!q.trim() || (title(t) + ' ' + t.site).toLowerCase().includes(q.trim().toLowerCase())));
+  const col = (st) => list.filter((t) => t.status === st).sort((a, b) => a.due - b.due);
+  const move = (id, patch) => setTasks(tasks.map((t) => (t.id === id ? { ...t, fresh: false, ...patch } : t)));
+  const late = tasks.filter((t) => t.status !== 'done' && t.due < 0).length;
+  const kp = [['À faire', tasks.filter((t) => t.status === 'assigned').length, 'assignées'], ['En cours', tasks.filter((t) => t.status === 'progress').length, 'démarrées'], ['Terminées', tasks.filter((t) => t.status === 'done').length, 'cette semaine'], ['En retard', late, late ? 'à traiter' : 'aucune']];
+  const Card = ({ t }) => { const lt = t.status !== 'done' && t.due < 0; return <div className={cls('tk', lt && 'late')}>
+    <div className="tk-h"><b>{title(t)}</b>{t.fresh && <span className="chip newc">Nouveau</span>}</div>
+    <span className="tk-s">{t.site}</span>
+    {t.status === 'progress' && <div className="tk-p"><div className="pr-b"><i style={{ width: t.p + '%' }} /></div><span>{t.p} %</span></div>}
+    <div className="tk-m"><span className={lt ? 'bad' : ''}>{t.status === 'done' ? (t.sync === 'synced' ? 'Synchronisé' : 'À synchroniser') : dueTxt(t.due)}</span><span>par {t.by}</span></div>
+    <div className="tk-a">
+      {t.status === 'assigned' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'progress', p: 10 })}>Démarrer</button>}
+      {t.status === 'progress' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'done', p: 100, sync: 'pending' })}>Terminer</button>}
+      {t.status === 'done' && t.sync !== 'synced' && <button className="btn sm" onClick={() => move(t.id, { sync: 'synced' })}>Marquer synchronisé</button>}
+      {t.status !== 'done' && <button className="lnk" onClick={() => setView('mobile')}>Ouvrir sur mobile</button>}
+      <button className="lnk" onClick={() => openDoc(t.wf)}>Voir le workflow</button></div></div>; };
+  return <>
+    <p className="sub mt-sub">Vos tâches terrain : un workflow assigné à un site, avec une échéance. Les workflows eux-mêmes se gèrent dans l’onglet Équipe et dans le Studio.</p>
+    <div className="kpis">{kp.map(([l, v, d]) => <div className={cls('kpi', l === 'En retard' && v > 0 && 'warn')} key={l}><span className="kl">{l}</span><b>{v}</b><em className="kd">{d}</em></div>)}</div>
+    <section className="card tkb">
+      <div className="tk-bar">
+        <input className="in" placeholder="Rechercher une tâche ou un site…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="fsl" value={wfF} onChange={(e) => setWfF(e.target.value)}><option value="">Tous les workflows</option>{mains.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</select>
+        <div className="seg sm lvseg2" role="tablist" aria-label="Affichage"><button role="tab" aria-selected={lay === 'board'} className={lay === 'board' ? 'on' : ''} onClick={() => setLay('board')}>Tableau</button><button role="tab" aria-selected={lay === 'list'} className={lay === 'list' ? 'on' : ''} onClick={() => setLay('list')}>Liste</button></div>
+      </div>
+      {lay === 'board'
+        ? <div className="kan">{['assigned', 'progress', 'done'].map((st) => <div key={st} className={'kcol ' + st}><div className="kh"><i />{TS[st]}<em>{col(st).length}</em></div>
+            {col(st).map((t) => <Card key={t.id} t={t} />)}{!col(st).length && <p className="k-e">Aucune tâche</p>}</div>)}</div>
+        : <div className="tbl"><table><thead><tr><th>Tâche</th><th>Site</th><th>Échéance</th><th>Statut</th><th>Progression</th><th /></tr></thead><tbody>
+          {[...list].sort((a, b) => a.due - b.due).map((t) => { const lt = t.status !== 'done' && t.due < 0; return <tr key={t.id}><td><b>{title(t)}</b>{t.fresh && <span className="chip newc">Nouveau</span>}</td><td>{t.site}</td><td className={lt ? 'bad' : ''}>{t.status === 'done' ? '—' : dueTxt(t.due)}</td>
+            <td><span className={'chip st ' + (t.status === 'done' ? 'okc' : t.status === 'progress' ? 'warnc' : '')}><i />{TS[t.status]}</span></td><td>{t.status === 'assigned' ? '—' : t.p + ' %'}</td>
+            <td className="num">{t.status === 'assigned' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'progress', p: 10 })}>Démarrer</button>}{t.status === 'progress' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'done', p: 100, sync: 'pending' })}>Terminer</button>}{t.status === 'done' && <span className="mut">{t.sync === 'synced' ? 'Synchronisé' : 'À synchroniser'}</span>}</td></tr>; })}
+          {!list.length && <tr><td colSpan={6} className="empty-row">Aucune tâche pour ces filtres.</td></tr>}</tbody></table></div>}
+    </section>
+  </>;
+}
+
 /* ---- Tableau de bord : génération de données d’exemple (déterministe) ---- */
 const END0 = new Date(2026, 10, 10); // fin de la période d’exemple : 10 nov. 2026
 const rnd = (seed) => { let x = Math.sin(seed * 9301 + 49297) * 233280; return x - Math.floor(x); };
@@ -764,7 +807,7 @@ const niceTop = (m) => { const step = m > 200 ? 100 : m > 60 ? 30 : 10; return M
 const sgn = (n, u) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n) + u;
 const EXECS = [['Inventaire magasin', 'Carrefour Wavre', 'Marie D.', 'Terminé', '6 min 12'], ['Visite stock hebdo', 'Carrefour Wavre', 'Paul M.', 'Terminé', '9 min 40'], ['Visite stock hebdo', 'Carrefour Namur', 'Sophie L.', 'En cours', '—'], ['Entrée de stock', 'Entrepôt Liège', 'Cyril R.', 'En attente de sync', '7 min 03'], ['Visite stock hebdo', 'Delhaize Ottignies', 'Marc T.', 'Terminé', '8 min 51'], ['Inventaire magasin', 'Delhaize Namur', 'Cyril R.', 'Terminé', '7 min 02'], ['Entrée de stock', 'Entrepôt Liège', 'Marie D.', 'Terminé', '5 min 44']];
 
-function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin }) {
+function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, tasks, setTasks }) {
   const [dtab, setDtab] = React.useState('team');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const [mode, setMode] = React.useState('custom'); const [off, setOff] = React.useState(0); const [cmp, setCmp] = React.useState('prev');
@@ -848,20 +891,7 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin }) {
     <footer className="dfoot"><span>Périmètre : équipe · Tous les sites · Du {fdate(P.start, { day: 'numeric', month: 'long' })} au {fdate(P.end, { day: 'numeric', month: 'long' })}</span><span>Durées exprimées en minutes et secondes</span></footer>
   </>;
 
-  const myView = <div className="dgrid">
-    <section className="card c-wide"><div className="card-h"><h2>Mes tâches assignées</h2><span className="chip">Cyril R.</span></div>
-      <div className="fcards sm mt">
-        {mains.map((d) => { const v = validate(wfs, d).every((c) => c.ok); const f = d.nodes.filter((n) => n.type === 'fork').length; return <button key={d.id} className="fcard" onClick={() => { setView('studio'); openDoc(d.id); }}>
-          <div className="fc-h"><b>{d.title}</b><span className={'chip ' + (d.status.startsWith('Actif') ? 'okc' : '')}>{d.status}</span></div>
-          <em>{d.subtitle}</em>
-          <div className="fc-m"><span>{d.nodes.filter((n) => n.type === 'step').length} étapes</span>{f ? <span className="par"><Ic n="branch" s={12} />{f} parallèle</span> : null}<span>{d.noun}</span></div>
-          <div className="fc-f"><span className={v ? 'okt' : 'badt'}>{v ? '✓ Valide' : '⚠ À corriger'}</span><span className="lnk2">Ouvrir dans le studio →</span></div></button>; })}
-        <button className="fcard new" onClick={newFlow}><span><Ic n="plus" s={22} /></span><b>Nouveau workflow</b><em>Partir de zéro, d’un modèle ou d’une liste d’étapes</em></button>
-      </div></section>
-    <section className="card"><h2>Mes KPIs</h2>
-      {[['Exécutions (moi)', '28', '+4 cette semaine'], ['Taux de complétion', '96 %', '+4 pts vs équipe'], ['Durée médiane', '6 min 44', '−36 s']].map(([l, v, d]) => <div className="kpi sm" key={l}><span>{l}</span><b>{v}</b><em>{d}</em></div>)}
-    </section>
-  </div>;
+  const myView = <MyTasks wfs={wfs} tasks={tasks} setTasks={setTasks} openDoc={openDoc} setView={setView} />;
 
   return <div className="page dash">
     <header className="pg-h">

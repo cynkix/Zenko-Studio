@@ -590,3 +590,18 @@ h3.sp-t { font: 700 13px var(--f-disp); margin: 22px 0 10px; padding-top: 14px; 
 .chip.st.actc { background: var(--ok); color: #fff; font-weight: 700; } .chip.st.actc i { background: #fff; }
 .seg.sm.lvseg { width: auto; } .lvseg button { flex: none; padding: 5px 14px; }
 .mq { grid-template-columns: minmax(0, 1fr) auto; } .mq .pr-b { width: 70px; flex: none; } .mq .btn { white-space: nowrap; }
+
+/* ---- Mes workflows : tableau de gestion des tâches ---- */
+.mt-sub { margin: -6px 0 14px; max-width: 720px; } .kpi.warn b, .kpi.warn .kd { color: var(--err); }
+.tkb { padding: 16px; } .tk-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; } .tk-bar .in { flex: 1; min-width: 200px; height: 40px; border-radius: 12px; } .tk-bar .fsl { width: auto; min-width: 200px; } .seg.sm.lvseg2 { width: auto; } .lvseg2 button { flex: none; padding: 6px 16px; } .lvseg2 button.on { background: var(--accent); color: var(--accent-fg); box-shadow: none; }
+.kan { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; } @media (max-width: 900px) { .kan { grid-template-columns: 1fr; } }
+.kcol { background: var(--surface2); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 160px; }
+.kh { display: flex; align-items: center; gap: 8px; font: 700 14px var(--f-disp); } .kh i { width: 9px; height: 9px; border-radius: 50%; background: var(--mut2, #999); } .kh em { margin-left: auto; font-style: normal; font: 600 12px var(--f-ui); color: var(--mut); background: var(--surface); border-radius: 99px; padding: 1px 9px; }
+.kcol.progress .kh i { background: var(--warn); } .kcol.done .kh i { background: var(--ok); } .kcol.assigned .kh i { background: var(--accent); }
+.tk { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; } .tk.late { border-color: color-mix(in srgb, var(--err) 45%, var(--line)); box-shadow: inset 3px 0 0 var(--err); }
+.tk-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; } .tk-h b { font: 700 15px var(--f-disp); } .tk-s { color: var(--mut); font-size: 13px; }
+.tk-p { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; } .tk-m { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--mut); } .tk-m .bad, td.bad { color: var(--err); font-weight: 700; }
+.tk-a { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 2px; } .tk-a .lnk { font-size: 12.5px; }
+.chip.newc { background: var(--accent); color: var(--accent-fg); border-color: transparent; margin-left: 6px; }
+.k-e { color: var(--mut); font-size: 13px; text-align: center; margin: 14px 0; }
+.tk-a .lnk { font: 600 12.5px var(--f-ui); text-decoration: none; color: var(--mut); background: none; border: 0; padding: 4px 0; cursor: pointer; } .tk-a .lnk:hover { color: var(--accent); text-decoration: underline; }

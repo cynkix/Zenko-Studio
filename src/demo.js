@@ -63,3 +63,14 @@ export const DATASETS0 = [
   { id: 'ds2', name: 'Liste de prix magasin', type: 'Liste de prix', cols: ['Produit', 'Prix HT', 'TVA'], data: PRODUCTS.map((p) => [p[0], (parseFloat(p[3].replace(',', '.')) / 1.06).toFixed(2).replace('.', ',') + ' €', '6 %']), rows: 860, size: '0,9 Mo', updated: '5 nov.', pushed: true, devices: 12 },
   { id: 'ds3', name: 'Promotions de novembre', type: 'Liste de prix', cols: ['Produit', 'Prix promo', 'Fin'], data: [['Lait demi-écrémé 1 L', '0,99 €', '30 nov.'], ['Pâtes penne 500 g', '0,89 €', '30 nov.'], ['Café moulu 250 g', '3,49 €', '15 déc.']], rows: 140, size: '0,2 Mo', updated: '10 nov.', pushed: false, devices: 0 },
 ];
+
+/** Tâches terrain de l'utilisateur (workflow assigné à un site, avec échéance en jours : <0 = en retard). */
+export const TASKS0 = [
+  { id: 't1', wf: 'inventory', site: 'Carrefour Wavre', due: 0, status: 'assigned', by: 'Responsable' },
+  { id: 't2', wf: 'merch', site: 'Carrefour Wavre', due: 1, status: 'assigned', by: 'Responsable' },
+  { id: 't3', wf: 'stock_in', site: 'Entrepôt Liège', due: 3, status: 'assigned', by: 'Marie D.' },
+  { id: 't4', wf: 'stock_in', site: 'Entrepôt Liège', due: -1, status: 'progress', p: 45, by: 'Responsable' },
+  { id: 't5', wf: 'merch', site: 'Delhaize Ottignies', due: 0, status: 'progress', p: 70, by: 'Responsable' },
+  { id: 't6', wf: 'inventory', site: 'Delhaize Namur', due: 0, status: 'done', p: 100, sync: 'pending', by: 'Responsable' },
+  { id: 't7', wf: 'merch', site: 'Carrefour Namur', due: 0, status: 'done', p: 100, sync: 'synced', by: 'Sophie L.' },
+];
