@@ -353,13 +353,13 @@ function App() {
 function TopBar({ collab, setCollab, people, setPeople, review, setReview, say, newFlow, view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct, activate, deactivate, activating }) {
   const root = wfs[rootId]; const bad = checks.filter((c) => !c.ok).length;
   const stop = (e) => e.stopPropagation();
-  return <header className="top" onClick={stop}>
+  return <header className={`top v-${view}`} onClick={stop}>
     {bp === 's' && view === 'studio' && <button className="ib" onClick={() => setDrawer(drawer === 'left' ? null : 'left')} aria-label="Navigation"><Ic n="menu" s={18} /></button>}
     <div className="logo"><Emblem /><b className="hide-s">Zenko <em>Studio</em></b></div>
     <nav className="views" aria-label="Vue">
-      <button className={view === 'dashboard' ? 'on' : ''} onClick={() => setView('dashboard')}><Ic n="grid" s={15} /><span className="hide-s">Tableau de bord</span></button>
-      <button className={view === 'studio' ? 'on' : ''} onClick={() => setView('studio')}><Ic n="flow" s={15} /><span className="hide-s">Studio</span></button>
-      <button className={view === 'mobile' ? 'on' : ''} onClick={() => setView('mobile')}><Ic n="phone" s={15} /><span className="hide-s">App mobile</span></button>
+      <button className={view === 'dashboard' ? 'on' : ''} onClick={() => setView('dashboard')} title="Tableau de bord"><Ic n="grid" s={15} /><span className="hide-s">Tableau de bord</span></button>
+      <button className={view === 'studio' ? 'on' : ''} onClick={() => setView('studio')} title="Studio"><Ic n="flow" s={15} /><span className="hide-s">Studio</span></button>
+      <button className={view === 'mobile' ? 'on' : ''} onClick={() => setView('mobile')} title="App mobile"><Ic n="phone" s={15} /><span className="hide-s">App mobile</span></button>
     </nav>
     {view === 'studio' && <>
       <div className="crumb">

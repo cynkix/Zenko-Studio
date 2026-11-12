@@ -568,3 +568,6 @@ h3.sp-t { font: 700 13px var(--f-disp); margin: 22px 0 10px; padding-top: 14px; 
 .ph-body.mp > * { flex: none; } .ph-body.mp .pf-back.sm { margin-top: 0; }
 .ph-body.mp .stk { height: 10px; min-height: 10px; }
 .ph-body.mp { justify-content: flex-start; }
+@media (min-width: 1000px) { .top.v-dashboard .views, .top.v-mobile .views { position: absolute; left: 50%; transform: translateX(-50%); } }
+@media (max-width: 1700px) { .top.v-studio .views button span { display: none; } .top.v-studio .views button { padding: 6px 9px; } }
+.top .rel { display: flex; align-items: center; gap: 8px; flex: none; }
