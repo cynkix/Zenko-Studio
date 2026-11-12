@@ -76,7 +76,7 @@ function Summary({ e, t }) {
 
 export function Phone({ e, t, api, onDone, header = true }) {
   const s = t.screen; const root = e.wfs[e.rootId];
-  const [ask, setAsk] = useState(false);
+  const [ask, setAsk] = useState(false); // false | true (retour) | 'pause'
   let body, foot = null;
   if (t.status === 'wait') {
     const others = e.threads.filter((k) => k.parent === t.parent && k.id !== t.id && k.status !== 'wait');

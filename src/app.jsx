@@ -592,7 +592,7 @@ function MobileDemo({ e, api, wfs, width, ver }) {
             <div className="ib-h"><b>{d.title}</b><span className={cls('chip', synced[d.id] && 'okc')}>{synced[d.id] ? 'Synchronisée' : 'À faire'}</span></div>
             <span className="ib-s">{d.subtitle}</span>
             <div className="ib-m"><span>{d.nodes.filter((n) => n.type === 'step').length} étapes</span>{f ? <span className="par"><Ic n="branch" s={12} />{f} bloc parallèle</span> : null}<span>{d.noun}</span></div></button>; })}</div>
-          <div className="ph-foot"><div className="pf-mut c">Tout est enregistré sur l’appareil</div></div></div></FitBox>
+          <div className="ph-nav"><button className="ph-nav-btn active"><Ic n="inbox" s={20} /><span>Tâches</span></button><button className="ph-nav-btn sync"><Ic n="restart" s={20} /><span className="ph-sync-dot" /><span>Synchro</span></button><button className="ph-nav-btn"><Ic n="user" s={20} /><span>Profil</span></button></div></div></FitBox>
         : <PlayStage e={e} api={api} solo onDone={done} />}
     </div>
   </div>;

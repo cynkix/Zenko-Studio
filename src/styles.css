@@ -432,3 +432,15 @@ h1, h2, h3, .t, .logo { font-family: var(--f-disp); }
 .btn.sm { padding: 3px 10px; font-size: 12.5px; }
 .bot-s { display: flex; flex-wrap: wrap; gap: 6px; } .bot-s .chip { cursor: pointer; } .bot-s .chip:hover { border-color: var(--mut2); color: var(--fg); }
 .bot-i { display: flex; gap: 6px; }
+
+/* ---------- mobile nav bar + process header ---------- */
+.ph-nav { flex: none; display: flex; border-top: 1px solid var(--line); background: var(--surface); }
+.ph-nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px 12px; border: 0; background: none; color: var(--mut); font-size: 10.5px; font-weight: 600; position: relative; }
+.ph-nav-btn.active { color: var(--tc, var(--accent)); }
+.ph-nav-btn.sync { position: relative; }
+.ph-sync-dot { position: absolute; top: 8px; right: calc(50% - 12px); width: 8px; height: 8px; border-radius: 50%; background: var(--warn); border: 2px solid var(--surface); }
+.ph-top.process { background: var(--surface2); padding: 10px 14px; gap: 8px; }
+.ph-noun { font: 700 13px var(--f-disp); color: var(--fg); }
+.ph-prog-lbl { font: 600 11px var(--f-ui); color: var(--mut); }
+.ph-pause { margin-left: auto; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--line2); background: none; color: var(--mut); }
+.ph-pause:hover { background: var(--surface); color: var(--fg); }
