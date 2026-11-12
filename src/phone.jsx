@@ -74,7 +74,7 @@ function Summary({ e, t }) {
       : <div className="pf-mut c">Rien à relire pour l’instant.</div>}</div></>;
 }
 
-export function Phone({ e, t, api, onDone, header = true }) {
+export function Phone({ e, t, api, onDone, team, header = true }) {
   const s = t.screen; const root = e.wfs[e.rootId];
   const [ask, setAsk] = useState(false); // false | true (retour) | 'pause'
   let body, foot = null;
@@ -85,7 +85,7 @@ export function Phone({ e, t, api, onDone, header = true }) {
   } else if (s && s.complete) {
     body = <div className="pf-center"><div className="pf-badge"><Ic n="check" s={32} sw={2.4} /></div><h1 className="pf-h">{root.noun} terminée</h1><p className="pf-help">Enregistrée sur l’appareil. Synchronisation dès le retour du réseau.</p>
       <div className="pf-card" style={{ width: '100%' }}><div className="pf-kv"><span>Statut</span><span className="pf-warn">En attente de sync</span></div><div className="pf-kv"><span>Saisies</span><span>{Object.keys(e.data).filter((k) => !k.startsWith('__')).length} valeurs</span></div></div></div>;
-    foot = <div className="pf-row">{t.hist.length > 0 && <button className="pf-back" onClick={() => setAsk(true)}><Ic n="left" s={16} />Corriger</button>}<button className="pf-cta" onClick={onDone || api.restart}>{onDone ? 'Retour à ma boîte' : 'Rejouer'}</button></div>;
+    foot = <div className="pf-row">{t.hist.length > 0 && <button className="pf-back" onClick={() => setAsk(true)}><Ic n="left" s={16} />Corriger</button>}<button className="pf-cta" onClick={onDone ? () => onDone({ finished: true }) : api.restart}>{onDone ? 'Retour à ma boîte' : 'Rejouer'}</button></div>;
   } else if (s) {
     const n = s.node.data; const I = (x) => interp(e, t, s, x);
     const blocked = n.kind === 'input' && n.required && !hasValue(e.data[s.key]);
@@ -103,6 +103,8 @@ export function Phone({ e, t, api, onDone, header = true }) {
       <div className="ph-ttl"><b>{s && s.item ? s.item : root.title}</b><span>{s && s.item ? root.title : root.subtitle}</span></div>
       {s && s.loopTotal ? <span className="ph-loop">{s.node ? '' : ''}{s.loopIdx}/{s.loopTotal}</span> : null}
       {t.letter && <span className="ph-br">{t.letter}</span>}
+      {team && team.length > 1 && <span className="ph-team" title={'Session partagée : ' + team.join(', ')}><Ic n="users" s={12} />{team.length}</span>}
+      {onDone && <span className="ph-pct" aria-label="Progression">{s && s.complete ? 100 : p} %</span>}
       {onDone && !(s && s.complete) && <button className="ph-pause" onClick={() => setAsk('exit')} aria-label="Quitter le workflow" title="Quitter le workflow"><Ic n="x" s={16} /></button>}
     </div>
     <div className="ph-prog"><i style={{ width: (s && s.complete ? 100 : p) + '%' }} /></div>
@@ -110,7 +112,7 @@ export function Phone({ e, t, api, onDone, header = true }) {
     {foot && <div className="ph-foot">{foot}</div>}
     {ask === 'exit' && <div className="pf-sheet" role="alertdialog" aria-label="Quitter le workflow"><div className="pf-sheet-in">
       <b>Quitter ce workflow ?</b><p>Vos réponses sont conservées sur l’appareil. Vous pourrez le reprendre depuis « Mes tâches ».</p>
-      <button className="pf-cta" onClick={() => { setAsk(false); onDone(); }}>Mettre en pause et quitter</button>
+      <button className="pf-cta" onClick={() => { setAsk(false); onDone({ paused: true, p }); }}>Mettre en pause et quitter</button>
       <button className="pf-back full" onClick={() => setAsk(false)}>Continuer le workflow</button></div></div>}
     {(ask === true) && <div className="pf-sheet" role="alertdialog" aria-label="Confirmer le retour"><div className="pf-sheet-in">
       <b>Revenir à l’écran précédent ?</b><p>Vos réponses sont conservées. Vous pourrez les modifier puis continuer.</p>
@@ -119,7 +121,7 @@ export function Phone({ e, t, api, onDone, header = true }) {
   </div>;
 }
 
-export function PlayStage({ e, api, solo, onDone, tabKey }) {
+export function PlayStage({ e, api, solo, onDone, tabKey, team }) {
   const [tab, setTab] = useState(null);
   const vis = e.threads.filter((t) => t.status !== 'parked');
   const gap = 28;
@@ -127,8 +129,8 @@ export function PlayStage({ e, api, solo, onDone, tabKey }) {
   if (solo || vis.length === 1) {
     const cur = vis.find((t) => t.id === tab) || vis.find((t) => t.status === 'run') || vis[0];
     return <div className="stage-col">
-      {vis.length > 1 && <div className="tabs" role="tablist">{vis.map((t) => <button key={t.id} role="tab" aria-selected={t.id === cur.id} className={t.id === cur.id ? 'on' : ''} style={{ '--tc': t.color }} onClick={() => setTab(t.id)}><i>{t.letter}</i>{t.label}<em>{t.status === 'wait' ? 'prête' : t.screen && t.screen.complete ? 'finie' : 'en cours'}</em></button>)}</div>}
-      <div className="stage-fit"><FitBox w={PW + 20} h={PH + 20}><Phone e={e} t={cur} api={api} onDone={onDone} /></FitBox></div>
+      {vis.length > 1 && <div className="tabs" role="tablist">{vis.map((t) => <button key={t.id} role="tab" aria-selected={t.id === cur.id} className={t.id === cur.id ? 'on' : ''} style={{ '--tc': t.color }} onClick={() => setTab(t.id)}><i>{t.letter}</i>{t.label}{team && team.length > 1 && <small className="tab-who">{team[(vis.indexOf(t)) % team.length].split(' ')[0]}</small>}<em>{t.status === 'wait' ? 'prête' : t.screen && t.screen.complete ? 'finie' : 'en cours'}</em></button>)}</div>}
+      <div className="stage-fit"><FitBox w={PW + 20} h={PH + 20}><Phone e={e} t={cur} api={api} onDone={onDone} team={team} /></FitBox></div>
     </div>;
   }
   const cols = Math.min(vis.length, 4); const rows = Math.ceil(vis.length / cols);

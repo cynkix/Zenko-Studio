@@ -17,10 +17,11 @@ import { createRoot } from 'react-dom/client';
 import { applyNodeChanges } from 'reactflow';
 import { Emblem } from './logo.jsx';
 import { CollabPop, CommentsTab, AssistantTab, Avatar, REVIEW_LABEL } from './collab.jsx';
-import { DAYS, RECENT, PEOPLE0, COMMENTS0 } from './demo.js';
+import { DAYS, RECENT, PEOPLE0, COMMENTS0, USERS, DATASETS0 } from './demo.js';
+import { AssignModal, DatasetsModal } from './admin.jsx';
 import { Ic } from './icons.jsx';
 import { expandDoc, usageOf, makeKey, BR, INPUTS, ADD_TYPES, initialDocs, layout, branchInfo, outline, validate, makeNode, nodeOf, outsOf, uid } from './data.js';
-import { createEngine, previewEngine, submit as eSubmit, back as eBack, demoValue, hasValue, fmt } from './engine.js';
+import { createEngine, previewEngine, submit as eSubmit, back as eBack, demoValue, hasValue, fmt, progressOf } from './engine.js';
 import { relay, insertOnEdge, insertFork, deleteNode, duplicateNode, addBranch, removeBranch, branchEdges } from './ops.js';
 import { Canvas, Markers } from './flow.jsx';
 import { PlayStage, Phone, FitBox, PW, PH } from './phone.jsx';
@@ -62,6 +63,7 @@ function App() {
   const [pal, setPal] = useState(false);
   const [menu, setMenu] = useState(null);
   const [toast, setToast] = useState(null);
+  const [assigns, setAssigns] = useState([]); const [datasets, setDatasets] = useState(DATASETS0); const [adm, setAdm] = useState(null); // adm : 'assign' | 'data' | null
   const [focus, setFocus] = useState(null);
   const [forkIdx, setForkIdx] = useState(0);
   const [solo, setSolo] = useState(false);
@@ -302,9 +304,9 @@ function App() {
   return <div className={layoutCls} onClick={() => { setMenu(null); }}>
     <Markers />
     <TopBar {...{ collab, setCollab, people, setPeople, review, setReview, say, newFlow: () => setNewOpen(true), view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist: hist.current, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct, activate, deactivate, activating }} />
-    {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} />
+    {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} openAdmin={setAdm} />
       : view === 'mobile'
-      ? <MobileDemo e={eng} api={api} wfs={wfs} width={width} ver={ver} />
+      ? <MobileDemo e={eng} api={api} wfs={wfs} width={width} ver={ver} assigns={assigns} datasets={datasets} />
       : <div className={cls('work', mode === 'play' && 'is-play')}>
         <aside className="side">
           <Sidebar {...{ addBlock, wfs, doc, docId, rootId, openDoc, sideTab, setSideTab, sel, setSel, setFocus, addAfterSel, duplicateFlow, mode, setMode, setDocId, bp, setDrawer }} />
@@ -339,6 +341,8 @@ function App() {
         {bp === 's' && drawer && <div className="scrim" onClick={() => setDrawer(null)} />}
       </div>}
     {newOpen && <NewFlow close={() => setNewOpen(false)} create={createFlow} />}
+    {adm === 'assign' && <AssignModal mains={Object.values(wfs).filter((d) => d.kind === 'main')} close={() => setAdm(null)} onAssign={(a) => { setAssigns((x) => [...x, a]); say(`« ${wfs[a.wf].title} » assigné à ${a.members.length} personne(s)`); }} />}
+    {adm === 'data' && <DatasetsModal datasets={datasets} setDatasets={setDatasets} close={() => setAdm(null)} say={say} />}
     {addMenu && <AddMenu m={addMenu} close={() => setAddMenu(null)} pick={(t) => { setAddMenu(null); addOnEdge(addMenu.edgeId, t); }} />}
     {pal && <Palette items={commands()} close={() => setPal(false)} />}
     {toast && <div className="toast" role="status">{toast}</div>}
@@ -594,63 +598,117 @@ function PlayView({ eng, api, ver, dnodes, dedges, ctx, root, solo, setSolo, aut
 }
 
 /* ------------------------------------------------------------------ Mobile demo */
-function MobileDemo({ e, api, wfs, width, ver }) {
-  const [scr, setScr] = useState('inbox'); const [st, setSt] = useState({}); // st[id] = 'pending' | 'synced'
-  const [tab, setTab] = useState('tasks'); const [off, setOff] = useState(true); const [syncing, setSyncing] = useState(false);
-  const [cur, setCur] = useState(null);
+const ME = 'Cyril R.';
+const slug = (t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const mb = (d) => (/Ko/.test(d.size) ? parseFloat(d.size.replace(',', '.')) / 1024 : parseFloat(d.size.replace(',', '.')));
+const Sw = ({ on, set, label }) => <button className={cls('mp-sw', on && 'on')} role="switch" aria-checked={on} aria-label={label} onClick={() => set(!on)}><i /></button>;
+
+/** Consultation hors ligne d'un jeu de données importé (recherche plein texte). */
+function DatasetView({ ds, back }) {
+  const [q, setQ] = useState(''); const t = q.trim().toLowerCase();
+  const rows = ds.data.filter((r) => !t || r.some((c) => c.toLowerCase().includes(t)));
+  return <div className="ph-body mp">
+    <button className="pf-back sm" onClick={back}><Ic n="left" s={14} />Profil</button>
+    <div className="mp-me"><div><b>{ds.name}</b><small>{ds.rows.toLocaleString('fr-FR')} lignes · {ds.size} · disponible hors ligne</small></div></div>
+    <input className="in" placeholder="Rechercher un produit, un EAN…" value={q} onChange={(e) => setQ(e.target.value)} />
+    <div className="ds-tbl">{rows.length ? rows.map((r, i) => <div key={i} className="ds-r"><b>{r[0]}</b><span>{r.slice(1).join(' · ')}</span></div>) : <p className="mp-e">Aucun résultat.</p>}</div>
+    <p className="mp-e">Aperçu : {ds.data.length} lignes affichées sur {ds.rows.toLocaleString('fr-FR')}.</p></div>;
+}
+
+function MobileDemo({ e, api, wfs, width, ver, assigns, datasets }) {
+  const [scr, setScr] = useState('inbox'); const [tab, setTab] = useState('tasks'); const [cur, setCur] = useState(null);
+  const [st, setSt] = useState({}); const [prog, setProg] = useState({}); // st[id] : 'progress' | 'pending' | 'sending' | 'synced'
+  const [off, setOff] = useState(true); const [bg, setBg] = useState(true); const [sending, setSending] = useState(false); const [media, setMedia] = useState([]);
+  const [flt, setFlt] = useState('all'); const [sheet, setSheet] = useState(null); const [pick, setPick] = useState([]); const [team, setTeam] = useState(null); const [dsId, setDsId] = useState(null);
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
-  const start = (id) => { setCur(id); api.restart(id); setScr('run'); };
-  const done = () => { setSt((s) => ({ ...s, [cur]: 'pending' })); setTab('tasks'); setScr('inbox'); };
+  const mates = USERS.filter((u) => u.n !== ME);
+  const label = (id) => st[id] === 'progress' ? 'progress' : st[id] === 'sending' ? 'sending' : st[id] === 'pending' || st[id] === 'synced' ? 'done' : 'assigned';
+  const assignFor = (id) => [...assigns].reverse().find((a) => a.wf === id && a.members.includes(ME));
+  const start = (id, names) => { setCur(id); api.restart(id); setTeam(names && names.length ? [ME, ...names] : null); setScr('run'); };
+  const done = (info) => {
+    if (info && info.paused) { setSt((x) => ({ ...x, [cur]: 'progress' })); setProg((x) => ({ ...x, [cur]: info.p })); }
+    else { const t = wfs[cur].title; setSt((x) => ({ ...x, [cur]: 'pending' })); setMedia((m) => [...m, { id: cur + Date.now() + 'a', wf: cur, name: `photo_${slug(t)}_1.jpg`, size: '1,8 Mo', p: 0 }, { id: cur + Date.now() + 'b', wf: cur, name: `photo_${slug(t)}_2.jpg`, size: '2,1 Mo', p: 0 }, { id: cur + Date.now() + 'c', wf: cur, name: 'signature.png', size: '24 Ko', p: 0 }]); }
+    setTab('tasks'); setScr('inbox'); setTeam(null);
+  };
   const pend = Object.keys(st).filter((k) => st[k] === 'pending');
-  const syncNow = () => { if (off || !pend.length) return; setSyncing(true); setTimeout(() => { setSt((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v === 'pending' ? 'synced' : v]))); setSyncing(false); }, 1100); };
+  const startSend = () => { if (off) return; setSt((x) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v === 'pending' ? 'sending' : v]))); setSending(true); };
+  // synchro en arrière-plan : dès que le réseau est là, l'envoi démarre tout seul
+  useEffect(() => { if (bg && !off && !sending && pend.length) { const t = setTimeout(startSend, 900); return () => clearTimeout(t); } }, [bg, off, sending, st]);
+  // file d'envoi : un média à la fois, en pause hors ligne
+  useEffect(() => { if (!sending || off) return; const t = setInterval(() => setMedia((m) => { const i = m.findIndex((x) => x.p < 100); return i < 0 ? m : m.map((x, k) => (k === i ? { ...x, p: Math.min(100, x.p + 34) } : x)); }), 380); return () => clearInterval(t); }, [sending, off]);
+  useEffect(() => {
+    if (!sending) return; const ids = Object.keys(st).filter((k) => st[k] === 'sending');
+    const fin = ids.filter((k) => media.filter((m) => m.wf === k).every((m) => m.p >= 100));
+    if (fin.length) setSt((x) => ({ ...x, ...Object.fromEntries(fin.map((k) => [k, 'synced'])) }));
+    if (!ids.length || fin.length === ids.length) setSending(false);
+  }, [media, st, sending]);
+  const queued = media.filter((m) => m.p < 100);
+  const store = datasets.filter((d) => d.pushed).reduce((a, d) => a + mb(d), 0);
+  const mq = media.filter((m) => m.p < 100).reduce((a, m) => a + mb(m), 0);
+  const saisies = Object.values(st).filter((v) => v !== 'synced').length * 0.12;
+  const total = store + mq + saisies;
+  const cnt = (k) => mains.filter((d) => label(d.id) === k).length;
+  const shown = mains.filter((d) => flt === 'all' || label(d.id) === flt);
   const data = e ? Object.entries(e.data).filter(([k]) => !k.startsWith('__')) : [];
+  const ds = datasets.find((d) => d.id === dsId);
+  const title = { tasks: 'Mes tâches', sync: 'Synchronisation', profile: ds ? 'Données hors ligne' : 'Profil' }[tab];
+  const sub = tab === 'tasks' ? `${ME} · ${mains.length} tâches` : tab === 'sync' ? (off ? 'Hors ligne' : sending ? 'Envoi en cours…' : 'En ligne') : 'Responsable magasin';
+  const STT = { assigned: 'Assigné', progress: 'En cours', done: 'Terminé', sending: 'Synchro…' };
+  const threads = e ? e.threads.filter((t) => t.status !== 'parked') : [];
   return <div className="mob">
     <div className="mob-side">
       <h1>App mobile</h1>
-      <p>Un opérateur seul sur le terrain. Quand un flux a des branches parallèles, elles deviennent des onglets : il passe de l’une à l’autre sans perdre sa place.</p>
-      <ul><li>Mode hors ligne, une saisie par écran</li><li>Boucles : un passage par rayon ou par produit</li><li>Branches parallèles : onglets en haut de l’écran</li></ul>
-      {scr === 'run' && e && <div className="drawer static"><div className="sh">Données capturées</div><div className="dr-b">{data.length ? data.map(([k, v]) => <div className="kv" key={k}><code>{k}</code><span>{fmt(v)}</span></div>) : <em className="mut">Aucune donnée.</em>}</div></div>}
+      <p>Un opérateur seul sur le terrain, ou une équipe qui se répartit les branches parallèles : chacun passe d’une branche à l’autre sans perdre sa place.</p>
+      <ul><li>Mode hors ligne, stockage local, synchro en arrière-plan</li><li>File d’envoi des photos et signatures</li><li>Boucles : un passage par rayon ou par produit</li><li>Catalogues et listes de prix consultables sans réseau</li></ul>
+      {scr === 'run' && e && <div className="drawer static"><div className="sh">Progression{team ? ' · session partagée' : ''}</div><div className="dr-b prg">{threads.map((t, i) => { const pc = t.screen && t.screen.complete ? 100 : t.status === 'wait' ? 100 : progressOf(e, t); return <div className="pr-row" key={t.id}><span className="pr-l"><b>{t.letter ? `${t.letter} · ` : ''}{t.label}</b>{team && <em>{team[i % team.length]}</em>}</span><div className="pr-b"><i style={{ width: pc + '%' }} /></div><span className="pr-p">{pc} %</span></div>; })}</div>
+        <div className="sh">Données capturées</div><div className="dr-b">{data.length ? data.map(([k, v]) => <div className="kv" key={k}><code>{k}</code><span>{fmt(v)}</span></div>) : <em className="mut">Aucune donnée.</em>}</div></div>}
     </div>
     <div className="mob-stage">
       {scr === 'inbox' || !e
         ? <FitBox w={PW + 20} h={PH + 40}><div className="phone"><div className="ph-notch" />
-          <div className="ph-top"><div className="ph-ttl"><b>{{ tasks: 'Mes tâches', sync: 'Synchronisation', profile: 'Profil' }[tab]}</b><span>{tab === 'tasks' ? `Cyril R. · ${mains.length} tâches` : tab === 'sync' ? (off ? 'Hors ligne' : 'En ligne') : 'Responsable magasin'}</span></div><button className={cls('ph-off', !off && 'on')} onClick={() => setOff(!off)} title="Basculer en ligne / hors ligne (démo)">{off ? 'hors ligne' : 'en ligne'}</button></div>
-          {tab === 'tasks' && <div className="ph-body inbox">{mains.map((d) => { const f = d.nodes.filter((n) => n.type === 'fork').length; return <button key={d.id} className="ib-card" onClick={() => start(d.id)}>
-            <div className="ib-h"><b>{d.title}</b><span className={cls('chip', st[d.id] === 'synced' && 'okc')}>{st[d.id] === 'synced' ? 'Synchronisée' : st[d.id] === 'pending' ? 'À synchroniser' : 'À faire'}</span></div>
-            <span className="ib-s">{d.subtitle}</span>
-            <div className="ib-m"><span>{d.nodes.filter((n) => n.type === 'step').length} étapes</span>{f ? <span className="par"><Ic n="branch" s={12} />{f} bloc parallèle</span> : null}<span>{d.noun}</span></div></button>; })}</div>}
+          <div className="ph-top"><div className="ph-ttl"><b>{title}</b><span>{sub}</span></div><button className={cls('ph-off', !off && 'on')} onClick={() => setOff(!off)} title="Basculer en ligne / hors ligne (démo)">{off ? 'hors ligne' : 'en ligne'}</button></div>
+          {tab === 'tasks' && <><div className="ib-flt" role="tablist">{[['all', 'Tous', mains.length], ['assigned', 'Assigné', cnt('assigned')], ['progress', 'En cours', cnt('progress')], ['done', 'Terminé', cnt('done')], ['sending', 'Synchro', cnt('sending')]].map(([k, l, n]) => <button key={k} role="tab" aria-selected={flt === k} className={flt === k ? 'on' : ''} onClick={() => setFlt(k)}>{l}<i>{n}</i></button>)}</div>
+            <div className="ph-body inbox">{shown.map((d) => { const f = d.nodes.filter((n) => n.type === 'fork').length; const k = label(d.id); const as = assignFor(d.id); return <div key={d.id} className="ib-wrap"><button className="ib-card" onClick={() => start(d.id)}>
+              <div className="ib-h"><b>{d.title}</b><span className={cls('chip', k === 'done' && 'okc', k === 'sending' && 'warnc')}>{k === 'progress' ? `En cours · ${prog[d.id] || 0} %` : k === 'done' ? (st[d.id] === 'synced' ? 'Terminé · synchronisé' : 'Terminé · à envoyer') : STT[k]}</span></div>
+              <span className="ib-s">{d.subtitle}</span>
+              {k === 'progress' && <div className="pr-b"><i style={{ width: (prog[d.id] || 0) + '%' }} /></div>}
+              <div className="ib-m"><span>{d.nodes.filter((n) => n.type === 'step').length} étapes</span>{f ? <span className="par"><Ic n="branch" s={12} />{f} bloc parallèle</span> : null}<span>{d.noun}</span></div></button>
+              <div className="ib-foot"><span>{as ? <><b className="new">Nouveau</b> {as.kind === 'group' ? `Groupe ${as.label}` : 'Assigné à vous'}</> : 'Assigné par le responsable'}</span><button className="lnk" onClick={() => { setSheet(d.id); setPick([]); }}><Ic n="users" s={12} />En équipe</button></div></div>; })}
+              {!shown.length && <p className="mp-e c">Aucune tâche dans « {STT[flt]} ».</p>}</div></>}
           {tab === 'sync' && <div className="ph-body mp">
-            <div className={cls('mp-st', !off && 'ok')}><Ic n={off ? 'restart' : 'check'} s={20} /><div><b>{off ? 'Hors ligne' : syncing ? 'Synchronisation…' : 'Connecté'}</b><small>{off ? 'Vos saisies restent sur l’appareil.' : 'Dernière synchro : à l’instant'}</small></div></div>
-            <div className="mp-h">À envoyer ({pend.length})</div>
-            {pend.length ? pend.map((k) => <div key={k} className="mp-row"><b>{wfs[k].title}</b><small>{wfs[k].noun} terminée</small></div>) : <p className="mp-e">Rien en attente.</p>}
-            {off && pend.length > 0 && <p className="mp-hint">Passez en ligne (badge en haut) pour envoyer.</p>}
-            <button className="pf-cta" disabled={off || !pend.length || syncing} onClick={syncNow}>{syncing ? 'Envoi…' : 'Synchroniser maintenant'}</button></div>}
-          {tab === 'profile' && <div className="ph-body mp">
-            <div className="mp-me"><span className="av" style={{ '--t': 'var(--bb)', width: 52, height: 52 }}>CR</span><div><b>Cyril R.</b><small>Responsable magasin · Carrefour Wavre</small></div></div>
+            <div className={cls('mp-st', !off && 'ok')}><Ic n={off ? 'restart' : 'check'} s={20} /><div><b>{off ? 'Hors ligne' : sending ? 'Synchronisation…' : 'Connecté'}</b><small>{off ? 'Vos saisies et médias restent sur l’appareil.' : sending ? 'Envoi des données puis des médias.' : 'Tout est à jour.'}</small></div></div>
+            <div className="mp-row"><span><b>Synchro en arrière-plan</b><small>Envoie dès que le réseau revient</small></span><Sw on={bg} set={setBg} label="Synchronisation en arrière-plan" /></div>
+            <div className="mp-h">Stockage local · {total.toFixed(1).replace('.', ',')} Mo</div>
+            <div className="stk"><i style={{ flex: store, background: 'var(--ba)' }} /><i style={{ flex: Math.max(mq, 0.01), background: 'var(--warn)' }} /><i style={{ flex: Math.max(saisies, 0.01), background: 'var(--accent)' }} /></div>
+            <div className="stk-l"><span><i style={{ background: 'var(--ba)' }} />Jeux de données {store.toFixed(1).replace('.', ',')} Mo</span><span><i style={{ background: 'var(--warn)' }} />Médias {mq.toFixed(1).replace('.', ',')} Mo</span><span><i style={{ background: 'var(--accent)' }} />Saisies {saisies.toFixed(1).replace('.', ',')} Mo</span></div>
+            <div className="mp-h">File d’envoi des médias ({queued.length})</div>
+            {media.length ? media.slice(-6).map((m) => <div key={m.id} className="mq"><span className="mq-n"><b>{m.name}</b><small>{m.size} · {m.p >= 100 ? 'Envoyé' : off ? 'En attente du réseau' : sending ? `Envoi ${m.p} %` : 'En file'}</small></span><div className="pr-b"><i style={{ width: m.p + '%', background: m.p >= 100 ? 'var(--ok)' : undefined }} /></div></div>) : <p className="mp-e">Aucun média en attente. Les photos et signatures d’un workflow terminé arrivent ici.</p>}
+            <div className="mp-h">Données à envoyer ({pend.length + Object.keys(st).filter((k) => st[k] === 'sending').length})</div>
+            {pend.map((k) => <div key={k} className="mp-row"><b>{wfs[k].title}</b><small>{wfs[k].noun} terminée</small></div>)}
+            {off && (pend.length > 0 || queued.length > 0) && <p className="mp-hint">Passez en ligne (badge en haut) pour envoyer.</p>}
+            <button className="pf-cta" disabled={off || !pend.length || sending} onClick={startSend}>{sending ? 'Envoi…' : 'Synchroniser maintenant'}</button></div>}
+          {tab === 'profile' && !ds && <div className="ph-body mp">
+            <div className="mp-me"><span className="av" style={{ '--t': 'var(--bb)', width: 52, height: 52 }}>CR</span><div><b>{ME}</b><small>Responsable magasin · Carrefour Wavre</small></div></div>
             <div className="mp-h">Appareil</div>
-            <div className="mp-row"><b>Mode hors ligne</b><small>{off ? 'Actif' : 'Désactivé'}</small></div>
-            <div className="mp-row"><b>Workflows disponibles</b><small>{mains.length}</small></div>
+            <div className="mp-row"><span><b>Mode hors ligne</b><small>{off ? 'Actif' : 'Désactivé'}</small></span><Sw on={off} set={setOff} label="Mode hors ligne" /></div>
+            <div className="mp-row"><span><b>Synchro en arrière-plan</b><small>{bg ? 'Activée' : 'Désactivée'}</small></span><Sw on={bg} set={setBg} label="Synchronisation en arrière-plan" /></div>
+            <div className="mp-h">Données hors ligne</div>
+            {datasets.filter((d) => d.pushed).map((d) => <button key={d.id} className="mp-row link" onClick={() => setDsId(d.id)}><span><b>{d.name}</b><small>{d.rows.toLocaleString('fr-FR')} lignes · {d.size} · maj {d.updated}</small></span><Ic n="right" s={14} /></button>)}
+            {!datasets.some((d) => d.pushed) && <p className="mp-e">Aucun jeu de données sur cet appareil. Le studio peut en pousser (Tableau de bord → Jeux de données).</p>}
             <div className="mp-row"><b>Version de l’app</b><small>Zenko 1.0 (démo)</small></div>
             <button className="pf-back full" onClick={() => setTab('tasks')}>Se déconnecter</button></div>}
-          <div className="ph-nav">{[['tasks', 'inbox', 'Tâches'], ['sync', 'restart', 'Synchro'], ['profile', 'user', 'Profil']].map(([k, ic, l]) => <button key={k} className={cls('ph-nav-btn', tab === k && 'active')} onClick={() => setTab(k)}><Ic n={ic} s={20} /><span>{l}</span>{k === 'sync' && pend.length > 0 && <span className="ph-sync-dot" />}</button>)}</div></div></FitBox>
-        : <PlayStage e={e} api={api} solo onDone={done} />}
+          {tab === 'profile' && ds && <DatasetView ds={ds} back={() => setDsId(null)} />}
+          <div className="ph-nav">{[['tasks', 'inbox', 'Tâches'], ['sync', 'restart', 'Synchro'], ['profile', 'user', 'Profil']].map(([k, ic, l]) => <button key={k} className={cls('ph-nav-btn', tab === k && 'active')} onClick={() => { setTab(k); setDsId(null); }}><Ic n={ic} s={20} /><span>{l}</span>{k === 'sync' && (pend.length > 0 || queued.length > 0) && <span className="ph-sync-dot" />}</button>)}</div>
+          {sheet && <div className="pf-sheet" role="dialog" aria-label="Démarrer en équipe"><div className="pf-sheet-in"><b>Démarrer en équipe</b>
+            <p>Les branches parallèles de « {wfs[sheet].title} » sont réparties entre vous et vos coéquipiers. Chacun suit sa part, la progression est partagée.</p>
+            {mates.map((u) => <label key={u.n} className="mt"><input type="checkbox" checked={pick.includes(u.n)} onChange={(ev) => setPick(ev.target.checked ? [...pick, u.n] : pick.filter((x) => x !== u.n))} /><span><b>{u.n}</b><small>{u.tags.slice(0, 2).join(' · ')}</small></span></label>)}
+            <button className="pf-cta" disabled={!pick.length} onClick={() => { const id = sheet; setSheet(null); start(id, pick); }}>{pick.length ? `Démarrer avec ${pick.length} coéquipier${pick.length > 1 ? 's' : ''}` : 'Choisir au moins un coéquipier'}</button>
+            <button className="pf-back full" onClick={() => setSheet(null)}>Annuler</button></div></div>}
+        </div></FitBox>
+        : <PlayStage e={e} api={api} solo onDone={done} team={team} />}
     </div>
   </div>;
 }
-
-
-/* ------------------------------------------------------------------ parse / dashboard / library / wizard */
-function parseLine(raw) {
-  const s = raw.trim(); const n = s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  let label = s, options;
-  const m = s.match(/^(.*?)\s*:\s*(.+\/.+)$/);
-  if (m) { label = m[1]; options = m[2].split('/').map((x) => x.trim()).filter(Boolean); return { type: /plusieurs|multiple/.test(n) ? 'multi' : 'single', label, options }; }
-  const t = /signature|signer/.test(n) ? 'signature' : /photo|image/.test(n) ? 'photo' : /scan|code.?barre|qr/.test(n) ? 'code' : /gps|position|localis/.test(n) ? 'geo' : /date/.test(n) ? 'date' : /note|etoile|satisfaction/.test(n) ? 'stars' : /combien|nombre|quantite|releve|compteur|mesure/.test(n) ? 'number' : /niveau|proprete|pourcent/.test(n) ? 'slider' : 'text';
-  return { type: t, label };
-}
-
-// DAYS → see src/demo.js
-// RECENT → see src/demo.js
 
 /* ---- Tableau de bord : génération de données d’exemple (déterministe) ---- */
 const END0 = new Date(2026, 10, 10); // fin de la période d’exemple : 10 nov. 2026
@@ -686,7 +744,7 @@ const niceTop = (m) => { const step = m > 200 ? 100 : m > 60 ? 30 : 10; return M
 const sgn = (n, u) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n) + u;
 const EXECS = [['Inventaire magasin', 'Carrefour Wavre', 'Marie D.', 'Terminé', '6 min 12'], ['Visite stock hebdo', 'Carrefour Wavre', 'Paul M.', 'Terminé', '9 min 40'], ['Visite stock hebdo', 'Carrefour Namur', 'Sophie L.', 'En cours', '—'], ['Entrée de stock', 'Entrepôt Liège', 'Cyril R.', 'En attente de sync', '7 min 03'], ['Visite stock hebdo', 'Delhaize Ottignies', 'Marc T.', 'Terminé', '8 min 51'], ['Inventaire magasin', 'Delhaize Namur', 'Cyril R.', 'Terminé', '7 min 02'], ['Entrée de stock', 'Entrepôt Liège', 'Marie D.', 'Terminé', '5 min 44']];
 
-function Dashboard({ wfs, openDoc, setView, newFlow }) {
+function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin }) {
   const [dtab, setDtab] = React.useState('team');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const [mode, setMode] = React.useState('custom'); const [off, setOff] = React.useState(0); const [cmp, setCmp] = React.useState('prev');
@@ -771,7 +829,7 @@ function Dashboard({ wfs, openDoc, setView, newFlow }) {
     <header className="pg-h">
       <div><h1>Tableau de bord</h1><p>Exécutions terrain et workflows. <span className="chip">Données d'exemple</span></p></div>
       <div className="pg-r"><div className="seg"><button className={dtab === 'team' ? 'on' : ''} onClick={() => setDtab('team')}><Ic n="users" s={14} />Équipe</button><button className={dtab === 'my' ? 'on' : ''} onClick={() => setDtab('my')}><Ic n="user" s={14} />Mes workflows</button></div>
-        {dtab === 'team' && <button className="btn pill" onClick={exportCsv}>{exported ? 'Exporté ✓' : 'Exporter'}</button>}</div>
+        {dtab === 'team' && <div className="pg-b"><button className="btn pill" onClick={() => openAdmin('data')}><Ic n="file" s={14} />Jeux de données</button><button className="btn pill" onClick={() => openAdmin('assign')}><Ic n="users" s={14} />Assigner</button><button className="btn pill" onClick={exportCsv}>{exported ? 'Exporté ✓' : 'Exporter'}</button></div>}</div>
     </header>
     {dtab === 'team' ? teamView : myView}
   </div>;
