@@ -748,6 +748,7 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin }) {
   const [dtab, setDtab] = React.useState('team');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const [mode, setMode] = React.useState('custom'); const [off, setOff] = React.useState(0); const [cmp, setCmp] = React.useState('prev');
+  const [lv, setLv] = React.useState('exec'); const [wfF, setWfF] = React.useState('all');
   const [f, setF] = React.useState({ wf: '', site: '', op: '', st: '' }); const [exported, setExported] = React.useState(false);
   const P = React.useMemo(() => periodData(mode, off), [mode, off]);
   const max = Math.max(...P.vals); const top = niceTop(max); const W = 640, H = 190, bw = W / P.N; const showVal = P.N <= 14;
@@ -763,6 +764,8 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin }) {
     setExported(true); setTimeout(() => setExported(false), 1800);
   };
   const FSel = ({ k, label, i }) => <label className="fld"><span>{label}</span><select className="fsl" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}><option value="">Tous</option>{opts(i).map((x) => <option key={x}>{x}</option>)}</select></label>;
+  const wfMatch = (k) => (d) => k === 'all' || (k === 'act' ? d.status.startsWith('Actif') : k === 'draft' ? d.status.startsWith('Brouillon') : validate(wfs, d).some((c) => !c.ok));
+  const wfRows = mains.filter(wfMatch(wfF));
   const drafts = mains.filter((d) => d.status.startsWith('Brouillon') && validate(wfs, d).every((c) => c.ok)).length;
   const kpiList = [['Exécutions · ' + lenTxt, P.tot.toLocaleString('fr-FR'), sgn(P.dExec, ' %'), P.dExec >= 0], ['Taux de complétion', P.done + ' %', sgn(P.dDone, ' pts'), P.dDone >= 0], ['Durée médiane', P.median, sgn(P.dMed, ' s'), P.dMed <= 0], ['Gain branches parallèles', '−38 %', 'Plus rapide', true]];
 
@@ -795,14 +798,27 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin }) {
         <h3 className="sp-t">Statuts des exécutions</h3>
         <div className="stk"><i style={{ flex: 92, background: 'var(--ok)' }} /><i style={{ flex: 5, background: 'var(--warn)' }} /><i style={{ flex: 3, background: 'var(--err)' }} /></div>
         <div className="stk-l"><span><i style={{ background: 'var(--ok)' }} />Terminé 92 %</span><span><i style={{ background: 'var(--warn)' }} />En cours 5 %</span><span><i style={{ background: 'var(--err)' }} />Abandonné 3 %</span></div></section>
-      <section className="card c-wide"><h2>Dernières exécutions</h2><p className="sub">Tous les collaborateurs · {rows.length} exécution{rows.length > 1 ? 's' : ''} sur {EXECS.length}</p>
+      <section className="card c-wide"><div className="card-h"><h2>{lv === 'exec' ? 'Dernières exécutions' : 'Workflows'}</h2>
+        <div className="seg sm lvseg" role="tablist" aria-label="Type de vue"><button role="tab" aria-selected={lv === 'exec'} className={lv === 'exec' ? 'on' : ''} onClick={() => setLv('exec')}>Exécutions</button><button role="tab" aria-selected={lv === 'wf'} className={lv === 'wf' ? 'on' : ''} onClick={() => setLv('wf')}>Workflows</button></div></div>
+      {lv === 'wf' ? <>
+        <p className="sub">État de publication · {wfRows.length} workflow{wfRows.length > 1 ? 's' : ''} sur {mains.length}</p>
+        <div className="wfchips" role="group" aria-label="Filtrer par état">{[['all', 'Tous'], ['act', 'Activé'], ['draft', 'Brouillon'], ['bad', 'À corriger']].map(([k, l]) => <button key={k} className={wfF === k ? 'on' : ''} onClick={() => setWfF(k)}>{l}<i>{k === 'all' ? mains.length : mains.filter(wfMatch(k)).length}</i></button>)}</div>
+        <div className="tbl"><table><thead><tr><th>Workflow</th><th>État</th><th>Version</th><th>Contrôles</th><th className="num">Exécutions</th></tr></thead><tbody>
+          {wfRows.map((d) => { const act = d.status.startsWith('Actif'); const bad = validate(wfs, d).filter((c) => !c.ok); return <tr key={d.id} className="tr-link" onClick={() => { setView('studio'); openDoc(d.id); }}>
+            <td>{d.title}</td><td><span className={'chip st ' + (act ? 'actc' : '')}><i />{act ? 'Activé' : 'Brouillon'}</span></td><td>{(d.status.match(/v\d+/) || ['—'])[0]}</td>
+            <td><span className={bad.length ? 'badt' : 'okt'}>{bad.length ? `⚠ ${bad.length} à corriger` : '✓ Valide'}</span></td><td className="num">{act ? byWf[mains.indexOf(d)].toLocaleString('fr-FR') : '—'}</td></tr>; })}
+          {!wfRows.length && <tr><td colSpan={5} className="empty-row">Aucun workflow pour ce filtre.</td></tr>}
+        </tbody></table></div>
+        <div className="tfoot"><span>{wfRows.length} workflows affichés</span><span>Les brouillons n’ont pas d’exécution</span></div>
+      </> : <>
+      <p className="sub">Tous les collaborateurs · {rows.length} exécution{rows.length > 1 ? 's' : ''} sur {EXECS.length}</p>
         <div className="fgrid"><FSel k="wf" label="Workflow" i={0} /><FSel k="site" label="Site" i={1} /><FSel k="op" label="Opérateur" i={2} /><FSel k="st" label="Exécution" i={3} /></div>
         <div className="tbl"><table><thead><tr><th>Workflow</th><th>Site</th><th>Opérateur</th><th>Exécution</th><th className="num">Durée</th></tr></thead><tbody>
           {rows.map((r, i) => <tr key={i} className="tr-link" onClick={() => { setView('studio'); openDoc(mains.find((d) => d.title === r[0])?.id || mains[0]?.id); }}>
             <td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><span className={'chip st ' + (r[3] === 'Terminé' ? 'okc' : r[3] === 'En cours' ? '' : 'warnc')}><i />{r[3]}</span></td><td className="num">{r[4]}</td></tr>)}
           {!rows.length && <tr><td colSpan={5} className="empty-row">Aucune exécution pour ces filtres.</td></tr>}
         </tbody></table></div>
-        <div className="tfoot"><span>{rows.length} exécutions affichées</span><span>— Exécution en cours</span></div></section>
+        <div className="tfoot"><span>{rows.length} exécutions affichées</span><span>— Exécution en cours</span></div></>}</section>
       <section className="card c-watch"><h2>Workflows à surveiller</h2><p className="sub">{mains.length} workflows · {drafts} brouillon{drafts > 1 ? 's' : ''} prêt{drafts > 1 ? 's' : ''} à activer</p>
         {mains.map((d) => { const bad = validate(wfs, d).filter((c) => !c.ok); const act = d.status.startsWith('Actif'); return <button key={d.id} className="watch" onClick={() => { setView('studio'); openDoc(d.id); }}>
           <span className={'wi ' + (act ? 'ok' : 'warn')}><Ic n={act ? 'check' : 'alert'} s={act ? 14 : 20} sw={act ? 3 : 2} /></span>
