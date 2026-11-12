@@ -652,45 +652,105 @@ function parseLine(raw) {
 // DAYS → see src/demo.js
 // RECENT → see src/demo.js
 
+/* ---- Tableau de bord : génération de données d’exemple (déterministe) ---- */
+const END0 = new Date(2026, 10, 10); // fin de la période d’exemple : 10 nov. 2026
+const rnd = (seed) => { let x = Math.sin(seed * 9301 + 49297) * 233280; return x - Math.floor(x); };
+const fdate = (d, o) => d.toLocaleDateString('fr-FR', o || { day: 'numeric', month: 'short' });
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const PERIODS = { day: 'Jour', week: 'Semaine', month: 'Mois', year: 'Année', custom: 'Personnalisé' };
+/** Série d’exécutions pour un mode et un décalage (0 = période la plus récente). */
+function periodData(mode, off) {
+  const N = { day: 12, week: 7, month: 30, year: 12, custom: 14 }[mode];
+  const span = { day: 1, week: 7, month: 30, year: 365, custom: 14 }[mode];
+  const end = addDays(END0, -off * span); const start = mode === 'day' ? end : mode === 'year' ? new Date(end.getFullYear() - 1, end.getMonth() + 1, 1) : addDays(end, -(N - 1));
+  const vals = []; const labels = [];
+  for (let i = 0; i < N; i++) {
+    const d = mode === 'year' ? new Date(start.getFullYear(), start.getMonth() + i, 1) : addDays(start, i);
+    const wk = d.getDay() === 0 || d.getDay() === 6;
+    let v;
+    if (mode === 'custom' && off === 0) v = DAYS[i];
+    else if (mode === 'day') v = Math.round(5 + rnd(off * 31 + i) * 10);
+    else if (mode === 'year') v = Math.round(330 + rnd(off * 17 + i) * 260);
+    else v = Math.round((wk ? 12 : 38) + rnd(off * 53 + i + N) * (wk ? 12 : 26));
+    vals.push(v);
+    labels.push(mode === 'day' ? `${8 + i} h` : mode === 'year' ? fdate(d, { month: 'short' }) : mode === 'week' ? fdate(d, { weekday: 'short' }) : (i === 0 || d.getDate() === 1) ? fdate(d) : String(d.getDate()));
+  }
+  const tot = vals.reduce((a, b) => a + b, 0);
+  const k = off === 0 && mode === 'custom';
+  const sec = k ? 440 : 400 + Math.round(rnd(off + N) * 90);
+  return { vals, labels, tot, start, end, N,
+    done: k ? 92 : 89 + Math.round(rnd(off * 7 + N) * 6), median: `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, '0')}`,
+    dExec: k ? 12 : Math.round(rnd(off * 3 + N) * 24 - 6), dDone: k ? 3 : Math.round(rnd(off * 5 + N) * 6 - 2), dMed: k ? -45 : Math.round(rnd(off * 11 + N) * 90 - 50) };
+}
+const niceTop = (m) => { const step = m > 200 ? 100 : m > 60 ? 30 : 10; return Math.ceil(m / step) * step; };
+const sgn = (n, u) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n) + u;
+const EXECS = [['Inventaire magasin', 'Carrefour Wavre', 'Marie D.', 'Terminé', '6 min 12'], ['Visite stock hebdo', 'Carrefour Wavre', 'Paul M.', 'Terminé', '9 min 40'], ['Visite stock hebdo', 'Carrefour Namur', 'Sophie L.', 'En cours', '—'], ['Entrée de stock', 'Entrepôt Liège', 'Cyril R.', 'En attente de sync', '7 min 03'], ['Visite stock hebdo', 'Delhaize Ottignies', 'Marc T.', 'Terminé', '8 min 51'], ['Inventaire magasin', 'Delhaize Namur', 'Cyril R.', 'Terminé', '7 min 02'], ['Entrée de stock', 'Entrepôt Liège', 'Marie D.', 'Terminé', '5 min 44']];
+
 function Dashboard({ wfs, openDoc, setView, newFlow }) {
   const [dtab, setDtab] = React.useState('team');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
-  const max = Math.max(...DAYS); const W = 560, H = 150, bw = W / DAYS.length;
-  const tot = DAYS.reduce((a, b) => a + b, 0);
+  const [mode, setMode] = React.useState('custom'); const [off, setOff] = React.useState(0); const [cmp, setCmp] = React.useState('prev');
+  const [f, setF] = React.useState({ wf: '', site: '', op: '', st: '' }); const [exported, setExported] = React.useState(false);
+  const P = React.useMemo(() => periodData(mode, off), [mode, off]);
+  const max = Math.max(...P.vals); const top = niceTop(max); const W = 640, H = 190, bw = W / P.N; const showVal = P.N <= 14;
+  const cmpTxt = cmp === 'prev' ? 'vs période précédente' : 'vs année précédente';
+  const shares = [0.577, 0.423 - 0.02, 0.02]; const byWf = mains.map((d, i) => (i < mains.length - 1 ? Math.round(P.tot * (shares[i] || 0)) : 0));
+  byWf[mains.length - 1] = P.tot - byWf.slice(0, -1).reduce((a, b) => a + b, 0);
+  const rangeTxt = mode === 'day' ? fdate(P.end, { day: 'numeric', month: 'long' }) : `${fdate(P.start)} – ${fdate(P.end)}`;
+  const lenTxt = { day: '1 jour', week: '7 jours', month: '30 jours', year: '12 mois', custom: '14 jours' }[mode];
+  const opts = (i) => [...new Set(EXECS.map((r) => r[i]))];
+  const rows = EXECS.filter((r) => (!f.wf || r[0] === f.wf) && (!f.site || r[1] === f.site) && (!f.op || r[2] === f.op) && (!f.st || r[3] === f.st));
+  const exportCsv = () => {
+    try { const csv = ['Workflow;Site;Opérateur;Statut;Durée', ...rows.map((r) => r.join(';'))].join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = 'executions.csv'; a.click(); } catch (err) { /* aperçu sans téléchargement */ }
+    setExported(true); setTimeout(() => setExported(false), 1800);
+  };
+  const FSel = ({ k, label, i }) => <label className="fld"><span>{label}</span><select className="fsl" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}><option value="">Tous</option>{opts(i).map((x) => <option key={x}>{x}</option>)}</select></label>;
+  const drafts = mains.filter((d) => d.status.startsWith('Brouillon') && validate(wfs, d).every((c) => c.ok)).length;
+  const kpiList = [['Exécutions · ' + lenTxt, P.tot.toLocaleString('fr-FR'), sgn(P.dExec, ' %'), P.dExec >= 0], ['Taux de complétion', P.done + ' %', sgn(P.dDone, ' pts'), P.dDone >= 0], ['Durée médiane', P.median, sgn(P.dMed, ' s'), P.dMed <= 0], ['Gain branches parallèles', '−38 %', 'Plus rapide', true]];
 
-  const teamView = <div className="dgrid">
-    <section className="card c-chart"><h2>Exécutions par jour · équipe</h2>
-      <svg viewBox={`0 0 ${W + 30} ${H + 30}`} role="img" aria-label="Exécutions par jour sur 14 jours">
-        {[0, 0.5, 1].map((t) => <g key={t}><line x1="28" x2={W + 28} y1={H - t * (H - 10)} y2={H - t * (H - 10)} className="gl" /><text x="22" y={H - t * (H - 10) + 4} className="gt" textAnchor="end">{Math.round(max * t)}</text></g>)}
-        {DAYS.map((v, i) => { const h = (v / max) * (H - 10); return <g key={i}><rect x={28 + i * bw + 5} y={H - h} width={bw - 10} height={h} rx="3" className={i === DAYS.length - 3 ? 'bar hi' : 'bar'} /><text x={28 + i * bw + bw / 2} y={H + 16} className="gt" textAnchor="middle">{i < 4 ? 28 + i : i - 3}</text></g>; })}
-      </svg><p className="cap">Octobre → novembre · les week-ends sont creux.</p></section>
-    <section className="card"><h2>Par workflow</h2>
-      {mains.slice(0, 4).map((d, i) => { const n = [312, 229, 0, 0][i] || 0; return <div className="hbar" key={d.id}><span>{d.title}</span><div><i style={{ width: Math.max(4, (n / 312) * 100) + '%' }} /></div><b>{n}</b></div>; })}
-      <h2 className="sp-t">Statuts</h2>
-      <div className="stk"><i style={{ flex: 92, background: 'var(--ok)' }} /><i style={{ flex: 5, background: 'var(--warn)' }} /><i style={{ flex: 3, background: 'var(--err)' }} /></div>
-      <div className="stk-l"><span><i style={{ background: 'var(--ok)' }} />Terminé 92 %</span><span><i style={{ background: 'var(--warn)' }} />En cours 5 %</span><span><i style={{ background: 'var(--err)' }} />Abandonné 3 %</span></div></section>
-    {(() => {
-      const EXECS = [['Inventaire magasin','Carrefour Wavre','Marie D.','Terminé','6 min 12'],['Visite stock hebdo','Carrefour Wavre','Paul M.','Terminé','9 min 40'],['Visite stock hebdo','Carrefour Namur','Sophie L.','En cours','—'],['Entrée de stock','Entrepôt Liège','Cyril R.','En attente de sync','7 min 03'],['Visite stock hebdo','Delhaize Ottignies','Marc T.','Terminé','8 min 51'],['Inventaire magasin','Delhaize Namur','Cyril R.','Terminé','7 min 02'],['Entrée de stock','Entrepôt Liège','Marie D.','Terminé','5 min 44']];
-      const [fWf, setFWf] = React.useState(''); const [fSite, setFSite] = React.useState(''); const [fOp, setFOp] = React.useState(''); const [fSt, setFSt] = React.useState('');
-      const wfs2 = [...new Set(EXECS.map((r) => r[0]))]; const sites = [...new Set(EXECS.map((r) => r[1]))]; const ops = [...new Set(EXECS.map((r) => r[2]))]; const sts = [...new Set(EXECS.map((r) => r[3]))];
-      const rows = EXECS.filter((r) => (!fWf || r[0] === fWf) && (!fSite || r[1] === fSite) && (!fOp || r[2] === fOp) && (!fSt || r[3] === fSt));
-      const sel = (v, s) => v ? <span className="fsel">{v} <button onClick={s}>✕</button></span> : null;
-      return <section className="card c-wide"><div className="card-h"><h2>Dernières exécutions · tous les collaborateurs</h2><span className="mut">{rows.length} / {EXECS.length}</span></div>
-        <div className="tbl"><table><thead><tr>
-          <th><div className="th-f"><span>Workflow</span><select className="flt" value={fWf} onChange={(e) => setFWf(e.target.value)}><option value="">Tous</option>{wfs2.map((x) => <option key={x}>{x}</option>)}</select>{sel(fWf, () => setFWf(''))}</div></th>
-          <th><div className="th-f"><span>Site</span><select className="flt" value={fSite} onChange={(e) => setFSite(e.target.value)}><option value="">Tous</option>{sites.map((x) => <option key={x}>{x}</option>)}</select>{sel(fSite, () => setFSite(''))}</div></th>
-          <th><div className="th-f"><span>Opérateur</span><select className="flt" value={fOp} onChange={(e) => setFOp(e.target.value)}><option value="">Tous</option>{ops.map((x) => <option key={x}>{x}</option>)}</select>{sel(fOp, () => setFOp(''))}</div></th>
-          <th><div className="th-f"><span>Statut</span><select className="flt" value={fSt} onChange={(e) => setFSt(e.target.value)}><option value="">Tous</option>{sts.map((x) => <option key={x}>{x}</option>)}</select>{sel(fSt, () => setFSt(''))}</div></th>
-          <th>Durée</th></tr></thead><tbody>
+  const teamView = <>
+    <section className="card pfilt">
+      <div className="pf-c"><span className="pf-l">Afficher par</span><div className="seg big">{Object.entries(PERIODS).map(([k, l]) => <button key={k} className={mode === k ? 'on' : ''} onClick={() => { setMode(k); setOff(0); }}>{mode === k && <i className="rdot" />}{l}</button>)}</div></div>
+      <div className="pf-c"><span className="pf-l">{mode === 'custom' ? `Période personnalisée · ${lenTxt}` : `Période · ${lenTxt}`}</span>
+        <div className="pf-r"><button className="ib sq" onClick={() => setOff(off + 1)} aria-label="Période précédente"><Ic n="left" s={16} /></button>
+          <div className="pf-date"><Ic n="calendar" s={15} />{rangeTxt}{mode !== 'day' && <> · {lenTxt}</>}</div>
+          <button className="ib sq" onClick={() => setOff(Math.max(0, off - 1))} disabled={off === 0} aria-label="Période suivante"><Ic n="right" s={16} /></button>
+          <button className="btn pill" onClick={() => setOff(0)} disabled={off === 0}>Aujourd’hui</button></div></div>
+      <div className="pf-c wide"><span className="pf-l">Comparaison des tendances</span>
+        <select className="fsl lg" value={cmp} onChange={(e) => setCmp(e.target.value)}><option value="prev">Période précédente</option><option value="year">Année précédente</option><option value="none">Aucune comparaison</option></select></div>
+    </section>
+    <div className="kpis">{kpiList.map(([l, v, d, good]) => <div className="kpi" key={l}><span className="kl"><i className="kok"><Ic n="check" s={9} sw={3} /></i>{l}</span><b>{v}</b>
+      {cmp === 'none' ? <em className="kd mut">&nbsp;</em> : <em className="kd"><strong className={good ? 'up' : 'dn'}>{d}</strong> {l === 'Gain branches parallèles' ? 'vs séquence' : cmpTxt}</em>}</div>)}</div>
+    <div className="dgrid">
+      <section className="card c-chart"><div className="card-h"><h2>Exécutions par jour</h2><b className="tot">{P.tot.toLocaleString('fr-FR')} exécutions</b></div>
+        <p className="sub">{mode === 'day' ? 'Activité de l’équipe heure par heure.' : mode === 'year' ? 'Activité de l’équipe sur les 12 derniers mois.' : `Activité de l’équipe sur les ${lenTxt.replace(' jours', '')} derniers jours.`}</p>
+        <svg viewBox={`0 0 ${W + 40} ${H + 34}`} role="img" aria-label="Exécutions sur la période">
+          {[0, 0.5, 1].map((t) => <g key={t}><line x1="36" x2={W + 36} y1={H - t * (H - 24)} y2={H - t * (H - 24)} className="gl" /><text x="28" y={H - t * (H - 24) + 4} className="gt" textAnchor="end">{Math.round(top * t)}</text></g>)}
+          {P.vals.map((v, i) => { const h = (v / top) * (H - 24); const hi = v === max; return <g key={i}><rect x={36 + i * bw + bw * 0.14} y={H - h} width={bw * 0.72} height={h} rx="3" className={hi ? 'bar hi' : 'bar'} />
+            {(showVal || hi) && <text x={36 + i * bw + bw / 2} y={H - h - 6} className={hi ? 'gt hi' : 'gt'} textAnchor="middle">{v}</text>}
+            {(P.N <= 14 || i % 3 === 0) && <text x={36 + i * bw + bw / 2} y={H + 20} className="gt" textAnchor="middle">{P.labels[i]}</text>}</g>; })}
+        </svg><p className="cap">{mode === 'year' ? 'Saisonnalité : pic en fin d’année.' : (mode === 'day' ? 'Pic en milieu de matinée.' : 'Les week-ends sont creux.')}</p></section>
+      <section className="card"><h2>Par workflow</h2><p className="sub">Volume d’exécutions sur la période</p>
+        {mains.map((d, i) => <div className="hbar" key={d.id}><span>{d.title}</span><b>{byWf[i].toLocaleString('fr-FR')}</b><div><i style={{ width: Math.max(0, (byWf[i] / Math.max(...byWf)) * 100) + '%' }} /></div></div>)}
+        <h3 className="sp-t">Statuts</h3>
+        <div className="stk"><i style={{ flex: 92, background: 'var(--ok)' }} /><i style={{ flex: 5, background: 'var(--warn)' }} /><i style={{ flex: 3, background: 'var(--err)' }} /></div>
+        <div className="stk-l"><span><i style={{ background: 'var(--ok)' }} />Terminé 92 %</span><span><i style={{ background: 'var(--warn)' }} />En cours 5 %</span><span><i style={{ background: 'var(--err)' }} />Abandonné 3 %</span></div></section>
+      <section className="card c-wide"><h2>Dernières exécutions</h2><p className="sub">Tous les collaborateurs · {rows.length} exécution{rows.length > 1 ? 's' : ''} sur {EXECS.length}</p>
+        <div className="fgrid"><FSel k="wf" label="Workflow" i={0} /><FSel k="site" label="Site" i={1} /><FSel k="op" label="Opérateur" i={2} /><FSel k="st" label="Statut" i={3} /></div>
+        <div className="tbl"><table><thead><tr><th>Workflow</th><th>Site</th><th>Opérateur</th><th>Statut</th><th className="num">Durée</th></tr></thead><tbody>
           {rows.map((r, i) => <tr key={i} className="tr-link" onClick={() => { setView('studio'); openDoc(mains.find((d) => d.title === r[0])?.id || mains[0]?.id); }}>
-            <td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><span className={'chip ' + (r[3] === 'Terminé' ? 'okc' : r[3] === 'En cours' ? '' : 'warnc')}>{r[3]}</span></td><td className="num">{r[4]}</td></tr>)}
+            <td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><span className={'chip st ' + (r[3] === 'Terminé' ? 'okc' : r[3] === 'En cours' ? '' : 'warnc')}><i />{r[3]}</span></td><td className="num">{r[4]}</td></tr>)}
           {!rows.length && <tr><td colSpan={5} className="empty-row">Aucune exécution pour ces filtres.</td></tr>}
-        </tbody></table></div></section>;
-    })()}
-    <section className="card"><div className="card-h"><h2>À surveiller</h2></div>
-      {mains.map((d) => { const bad = validate(wfs, d).filter((c) => !c.ok); return <button key={d.id} className="watch" onClick={() => { setView('studio'); openDoc(d.id); }}><span className={'dot ' + (bad.length ? 'bad' : 'ok')}>{bad.length ? bad.length : '✓'}</span><span><b>{d.title}</b><em>{bad.length ? bad[0].label : d.status + ' · prêt à activer'}</em></span><Ic n="right" s={14} /></button>; })}
-      <button className="btn block" onClick={newFlow}><Ic n="plus" s={14} />Créer un workflow</button></section>
-  </div>;
+        </tbody></table></div>
+        <div className="tfoot"><span>{rows.length} exécutions affichées</span><span>— Exécution en cours</span></div></section>
+      <section className="card c-watch"><h2>À surveiller</h2><p className="sub">{mains.length} workflows · {drafts} brouillon{drafts > 1 ? 's' : ''} prêt{drafts > 1 ? 's' : ''} à activer</p>
+        {mains.map((d) => { const bad = validate(wfs, d).filter((c) => !c.ok); const act = d.status.startsWith('Actif'); return <button key={d.id} className="watch" onClick={() => { setView('studio'); openDoc(d.id); }}>
+          <span className={'wi ' + (act ? 'ok' : 'warn')}><Ic n={act ? 'check' : 'alert'} s={act ? 14 : 20} sw={act ? 3 : 2} /></span>
+          <span className="wt"><b>{d.title}</b><em>{d.status}</em><small className={bad.length ? 'bad' : act ? 'ok' : 'warn'}>{bad.length ? bad[0].label : act ? 'Workflow actif' : 'Prêt à activer'}</small></span><Ic n="right" s={16} /></button>; })}
+        <button className="btn pri block lg" onClick={newFlow}>Créer un workflow</button><p className="sub foot">Les brouillons ne génèrent pas d’exécution.</p></section>
+    </div>
+    <footer className="dfoot"><span>Périmètre : équipe · Tous les sites · Du {fdate(P.start, { day: 'numeric', month: 'long' })} au {fdate(P.end, { day: 'numeric', month: 'long' })}</span><span>Durées exprimées en minutes et secondes</span></footer>
+  </>;
 
   const myView = <div className="dgrid">
     <section className="card c-wide"><div className="card-h"><h2>Mes tâches assignées</h2><span className="chip">Cyril R.</span></div>
@@ -710,11 +770,9 @@ function Dashboard({ wfs, openDoc, setView, newFlow }) {
   return <div className="page dash">
     <header className="pg-h">
       <div><h1>Tableau de bord</h1><p>Exécutions terrain et workflows. <span className="chip">Données d'exemple</span></p></div>
-      <div className="seg"><button className={dtab === 'team' ? 'on' : ''} onClick={() => setDtab('team')}><Ic n="users" s={14} />Équipe</button><button className={dtab === 'my' ? 'on' : ''} onClick={() => setDtab('my')}><Ic n="user" s={14} />Mes workflows</button></div>
+      <div className="pg-r"><div className="seg"><button className={dtab === 'team' ? 'on' : ''} onClick={() => setDtab('team')}><Ic n="users" s={14} />Équipe</button><button className={dtab === 'my' ? 'on' : ''} onClick={() => setDtab('my')}><Ic n="user" s={14} />Mes workflows</button></div>
+        {dtab === 'team' && <button className="btn pill" onClick={exportCsv}>{exported ? 'Exporté ✓' : 'Exporter'}</button>}</div>
     </header>
-    <div className="kpis">
-      {[['Exécutions · 14 jours', tot.toLocaleString('fr-FR'), '+12 % vs période précédente', 'up'], ['Taux de complétion', '92 %', '+3 pts', 'up'], ['Durée médiane', '7 min 20', '−45 s', 'up'], ['Gain branches parallèles', '−38 %', 'vs séquence', 'up']].map(([l, v, d]) => <div className="kpi" key={l}><span>{l}</span><b>{v}</b><em>{d}</em></div>)}
-    </div>
     {dtab === 'team' ? teamView : myView}
   </div>;
 }
