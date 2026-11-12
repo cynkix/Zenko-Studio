@@ -611,3 +611,7 @@ h3.sp-t { font: 700 13px var(--f-disp); margin: 22px 0 10px; padding-top: 14px; 
 .tk-bar2 { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 14px; } .tk-bar2 .wfchips { margin: 0; } .tk-r { display: flex; gap: 12px; align-items: center; } .tk-r .lnk { font: 600 12.5px var(--f-ui); background: none; border: 0; color: var(--mut); cursor: pointer; } .tk-r .btn:disabled { opacity: .45; }
 .warnt { color: var(--warn); font-weight: 700; }
 .chip.syncing { display: inline-flex; align-items: center; gap: 7px; } .spin { width: 11px; height: 11px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+
+.tk.wf { cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; } .tk.wf:hover, .tk.wf:focus-visible { border-color: var(--accent); box-shadow: 0 4px 14px rgba(0,0,0,.08); outline: none; transform: translateY(-1px); }
+.kcol.review .kh i { background: var(--warn); } .kcol.draft .kh i { background: var(--mut2, #999); } .kcol.active .kh i { background: var(--ok); }
+.tk-a .btn:disabled { opacity: .45; } .tbl .tk-a { justify-content: flex-end; flex-wrap: nowrap; } .mut.sm { font-size: 12px; }

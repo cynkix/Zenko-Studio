@@ -17,7 +17,7 @@ import { createRoot } from 'react-dom/client';
 import { applyNodeChanges } from 'reactflow';
 import { Emblem } from './logo.jsx';
 import { CollabPop, CommentsTab, AssistantTab, Avatar, REVIEW_LABEL } from './collab.jsx';
-import { DAYS, RECENT, PEOPLE0, COMMENTS0, USERS, DATASETS0, TASKS0 } from './demo.js';
+import { DAYS, RECENT, PEOPLE0, COMMENTS0, USERS, DATASETS0 } from './demo.js';
 import { AssignModal, DatasetsModal } from './admin.jsx';
 import { Ic } from './icons.jsx';
 import { expandDoc, usageOf, makeKey, BR, INPUTS, ADD_TYPES, initialDocs, layout, branchInfo, outline, validate, makeNode, nodeOf, outsOf, uid } from './data.js';
@@ -63,7 +63,7 @@ function App() {
   const [pal, setPal] = useState(false);
   const [menu, setMenu] = useState(null);
   const [toast, setToast] = useState(null);
-  const [tasks, setTasks] = useState(TASKS0); const [assigns, setAssigns] = useState([]); const [datasets, setDatasets] = useState(DATASETS0); const [adm, setAdm] = useState(null); // adm : 'assign' | 'data' | null
+  const [assigns, setAssigns] = useState([]); const [rev, setRev] = useState({}); const [arch, setArch] = useState([]); const [admWf, setAdmWf] = useState(null); const [datasets, setDatasets] = useState(DATASETS0); const [adm, setAdm] = useState(null); // adm : 'assign' | 'data' | null
   const [focus, setFocus] = useState(null);
   const [forkIdx, setForkIdx] = useState(0);
   const [solo, setSolo] = useState(false);
@@ -164,6 +164,15 @@ function App() {
   const openSub = useCallback((id) => { if (wfsRef.current[id]) { setDocId(id); setSel(null); setDual(false); } }, []);
   const setDir = (v) => { setDirS(v); ls.set('sp-dir', v); const n = {}; Object.values(wfsRef.current).forEach((d) => { n[d.id] = relay(d, v); }); setW(n); setStruct((x) => x + 1); };
   const reflow = () => { setW({ ...wfsRef.current, [docId]: relay(wfsRef.current[docId], dir) }); setStruct((x) => x + 1); say('Flux réorganisé'); };
+  /* gestion depuis « Mes workflows » : actions sur un workflow donné, sans l'ouvrir */
+  const activateDoc = (id) => {
+    const d = wfsRef.current[id]; if (!validate(wfsRef.current, d).every((c) => c.ok)) { say('Corrigez les contrôles avant d’activer'); return; }
+    const m = (d.status || '').match(/v(\d+)/); const nextV = m ? parseInt(m[1]) + 1 : 1;
+    commit({ ...wfsRef.current, [id]: { ...d, status: `Actif · v${nextV}`, history: [...(d.history || []), { v: nextV - 1 || nextV, status: d.status || 'Brouillon', ts: new Date().toISOString().slice(0, 16).replace('T', ' ') }] } });
+    setRev((r) => { const n = { ...r }; delete n[id]; return n; }); say(`« ${d.title} » activé · version ${nextV}`);
+  };
+  const deactivateDoc = (id) => { const d = wfsRef.current[id]; const m = (d.status || '').match(/v(\d+)/); commit({ ...wfsRef.current, [id]: { ...d, status: `Brouillon · v${(m ? parseInt(m[1]) : 1) + 1}` } }); };
+  const dupDoc = (id) => { const nid = 'copy' + Math.random().toString(36).slice(2, 5); const d = wfsRef.current[id]; commit({ ...wfsRef.current, [nid]: { ...d, id: nid, title: d.title + ' (copie)', status: 'Brouillon · v1', history: [] } }); say('Workflow dupliqué'); };
   const duplicateFlow = () => {
     const id = 'copy' + Math.random().toString(36).slice(2, 5); const d = wfsRef.current[rootId];
     commit({ ...wfsRef.current, [id]: { ...d, id, title: d.title + ' (copie)', status: 'Brouillon · v1' } }); openDoc(id); say('Flux dupliqué');
@@ -304,7 +313,7 @@ function App() {
   return <div className={layoutCls} onClick={() => { setMenu(null); }}>
     <Markers />
     <TopBar {...{ collab, setCollab, people, setPeople, review, setReview, say, newFlow: () => setNewOpen(true), view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist: hist.current, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct, activate, deactivate, activating }} />
-    {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} openAdmin={setAdm} tasks={tasks} setTasks={setTasks} />
+    {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} openAdmin={(k, id) => { setAdmWf(id || null); setAdm(k); }} mgmt={{ comments, rev, setRev, arch, setArch, activateDoc, deactivateDoc, dupDoc }} />
       : view === 'mobile'
       ? <MobileDemo e={eng} api={api} wfs={wfs} width={width} ver={ver} assigns={assigns} datasets={datasets} />
       : <div className={cls('work', mode === 'play' && 'is-play')}>
@@ -341,7 +350,7 @@ function App() {
         {bp === 's' && drawer && <div className="scrim" onClick={() => setDrawer(null)} />}
       </div>}
     {newOpen && <NewFlow close={() => setNewOpen(false)} create={createFlow} />}
-    {adm === 'assign' && <AssignModal mains={Object.values(wfs).filter((d) => d.kind === 'main')} close={() => setAdm(null)} onAssign={(a) => { setAssigns((x) => [...x, a]); if (a.members.includes('Cyril R.')) setTasks((t) => [{ id: 't' + Date.now(), wf: a.wf, site: 'Carrefour Wavre', due: 0, status: 'assigned', by: a.kind === 'group' ? 'Groupe ' + a.label : 'Responsable', fresh: true }, ...t]); say(`« ${wfs[a.wf].title} » assigné à ${a.members.length} personne(s)`); }} />}
+    {adm === 'assign' && <AssignModal initial={admWf} mains={Object.values(wfs).filter((d) => d.kind === 'main')} close={() => setAdm(null)} onAssign={(a) => { setAssigns((x) => [...x, a]); say(`« ${wfs[a.wf].title} » assigné à ${a.members.length} personne(s)`); }} />}
     {adm === 'data' && <DatasetsModal datasets={datasets} setDatasets={setDatasets} close={() => setAdm(null)} say={say} />}
     {addMenu && <AddMenu m={addMenu} close={() => setAddMenu(null)} pick={(t) => { setAddMenu(null); addOnEdge(addMenu.edgeId, t); }} />}
     {pal && <Palette items={commands()} close={() => setPal(false)} />}
@@ -730,59 +739,50 @@ function parseLine(raw) {
   return { type: t, label };
 }
 
-/* ---- « Mes workflows » : tableau de gestion de mes tâches (kanban / liste) ---- */
-const TS = { assigned: 'Assigné', progress: 'En cours', done: 'Terminé' };
-const dueTxt = (n) => (n < 0 ? 'En retard' : n === 0 ? 'Aujourd’hui' : n === 1 ? 'Demain' : `Dans ${n} jours`);
-function MyTasks({ wfs, tasks, setTasks, openDoc, setView }) {
-  const [q, setQ] = React.useState(''); const [wfF, setWfF] = React.useState(''); const [siteF, setSiteF] = React.useState(''); const [lay, setLay] = React.useState('board');
-  const [stF, setStF] = React.useState('all'); // all | assigned | progress | done | sync | late
-  const [busy, setBusy] = React.useState([]);
-  const mains = Object.values(wfs).filter((d) => d.kind === 'main'); const title = (t) => (wfs[t.wf] ? wfs[t.wf].title : t.wf);
-  const sites = [...new Set(tasks.map((t) => t.site))];
-  const isLate = (t) => t.status !== 'done' && t.due < 0; const isPend = (t) => t.status === 'done' && t.sync !== 'synced';
-  const byStF = { all: () => true, assigned: (t) => t.status === 'assigned', progress: (t) => t.status === 'progress', done: (t) => t.status === 'done', sync: isPend, late: isLate };
-  const list = tasks.filter((t) => (!wfF || t.wf === wfF) && (!siteF || t.site === siteF) && byStF[stF](t) && (!q.trim() || (title(t) + ' ' + t.site).toLowerCase().includes(q.trim().toLowerCase())));
-  const col = (st) => list.filter((t) => t.status === st).sort((a, b) => a.due - b.due);
-  const move = (id, patch) => setTasks((all) => all.map((t) => (t.id === id ? { ...t, fresh: false, ...patch } : t)));
-  const pend = tasks.filter(isPend); const late = tasks.filter(isLate).length;
-  const syncIds = (ids) => { setBusy((b) => [...b, ...ids]); setTimeout(() => { setTasks((all) => all.map((t) => (ids.includes(t.id) ? { ...t, sync: 'synced' } : t))); setBusy((b) => b.filter((x) => !ids.includes(x))); }, 1000); };
-  const active = q || wfF || siteF || stF !== 'all'; const reset = () => { setQ(''); setWfF(''); setSiteF(''); setStF('all'); };
-  const kp = [['assigned', 'À faire', tasks.filter(byStF.assigned).length, 'assignées'], ['progress', 'En cours', tasks.filter(byStF.progress).length, 'démarrées'], ['done', 'Terminées', tasks.filter(byStF.done).length, 'cette semaine'], ['sync', 'À synchroniser', pend.length, pend.length ? 'en attente d’envoi' : 'tout est envoyé'], ['late', 'En retard', late, late ? 'à traiter' : 'aucune']];
-  const SyncBtn = ({ t }) => busy.includes(t.id) ? <span className="chip warnc syncing"><i className="spin" />Synchronisation…</span> : <button className="btn sm pri" onClick={() => syncIds([t.id])}>Synchroniser</button>;
-  const Card = ({ t }) => { const lt = isLate(t); return <div className={cls('tk', lt && 'late')}>
-    <div className="tk-h"><b>{title(t)}</b>{t.fresh && <span className="chip newc">Nouveau</span>}</div>
-    <span className="tk-s">{t.site}</span>
-    {t.status === 'progress' && <div className="tk-p"><div className="pr-b"><i style={{ width: t.p + '%' }} /></div><span>{t.p} %</span></div>}
-    <div className="tk-m"><span className={lt ? 'bad' : isPend(t) ? 'warnt' : ''}>{t.status === 'done' ? (t.sync === 'synced' ? '✓ Synchronisé' : 'À synchroniser') : dueTxt(t.due)}</span><span>par {t.by}</span></div>
-    <div className="tk-a">
-      {t.status === 'assigned' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'progress', p: 10 })}>Démarrer</button>}
-      {t.status === 'progress' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'done', p: 100, sync: 'pending' })}>Terminer</button>}
-      {isPend(t) && <SyncBtn t={t} />}
-      {t.status !== 'done' && <button className="lnk" onClick={() => setView('mobile')}>Ouvrir sur mobile</button>}
-      <button className="lnk" onClick={() => openDoc(t.wf)}>Voir le workflow</button></div></div>; };
+/* ---- « Mes workflows » : les workflows que je crée et que je gère (brouillon → relecture → activé) ---- */
+const STAGES = { draft: 'Brouillon', review: 'En relecture', active: 'Activé' };
+function MyWorkflows({ wfs, openDoc, openAdmin, newFlow, comments, rev, setRev, arch, setArch, activateDoc, deactivateDoc, dupDoc }) {
+  const [q, setQ] = React.useState(''); const [f, setF] = React.useState('all'); const [lay, setLay] = React.useState('board');
+  const mains = Object.values(wfs).filter((d) => d.kind === 'main');
+  const info = (d) => { const bad = validate(wfs, d).filter((c) => !c.ok).length; const open = Object.entries(comments).filter(([k, v]) => k.startsWith(d.id + ':') && v.some((c) => !c.done)).reduce((a, [, v]) => a + v.filter((c) => !c.done).length, 0);
+    const stage = d.status.startsWith('Actif') ? 'active' : rev[d.id] === 'review' ? 'review' : 'draft';
+    return { d, bad, open, stage, v: (d.status.match(/v\d+/) || ['v1'])[0], steps: d.nodes.filter((n) => n.type === 'step').length, par: d.nodes.filter((n) => n.type === 'fork').length, gone: arch.includes(d.id) }; };
+  const all = mains.map(info); const live = all.filter((x) => !x.gone);
+  const pred = { all: () => true, draft: (x) => x.stage === 'draft', review: (x) => x.stage === 'review', active: (x) => x.stage === 'active', bad: (x) => x.bad > 0, cm: (x) => x.open > 0 };
+  const list = (f === 'arch' ? all.filter((x) => x.gone) : live.filter(pred[f])).filter((x) => !q.trim() || (x.d.title + ' ' + (x.d.subtitle || '')).toLowerCase().includes(q.trim().toLowerCase()));
+  const n = (k) => live.filter(pred[k]).length; const act = (e, fn) => { e.stopPropagation(); fn(); };
+  const kp = [['draft', 'Brouillons', n('draft'), 'en cours d’écriture'], ['review', 'En relecture', n('review'), 'chez le client'], ['active', 'Activés', n('active'), 'en production'], ['bad', 'À corriger', n('bad'), n('bad') ? 'contrôles en échec' : 'tout est valide'], ['cm', 'Commentaires', live.reduce((a, x) => a + x.open, 0), 'à traiter']];
+  const Actions = ({ x }) => <div className="tk-a">
+    {x.gone ? <button className="btn sm" onClick={(e) => act(e, () => setArch(arch.filter((i) => i !== x.d.id)))}>Restaurer</button> : <>
+      {x.stage === 'draft' && (x.bad ? <button className="btn sm pri" onClick={(e) => act(e, () => openDoc(x.d.id))}>Corriger</button> : <><button className="btn sm pri" onClick={(e) => act(e, () => activateDoc(x.d.id))}>Activer</button><button className="btn sm" onClick={(e) => act(e, () => setRev({ ...rev, [x.d.id]: 'review' }))}>Envoyer en relecture</button></>)}
+      {x.stage === 'review' && <><button className="btn sm pri" onClick={(e) => act(e, () => activateDoc(x.d.id))} disabled={!!x.bad}>Valider et activer</button><button className="btn sm" onClick={(e) => act(e, () => { const r = { ...rev }; delete r[x.d.id]; setRev(r); })}>Retour brouillon</button></>}
+      {x.stage === 'active' && <><button className="btn sm" onClick={(e) => act(e, () => { deactivateDoc(x.d.id); openDoc(x.d.id); })}>Modifier</button><button className="btn sm" onClick={(e) => act(e, () => openAdmin('assign', x.d.id))}>Assigner</button></>}
+      <button className="lnk" onClick={(e) => act(e, () => dupDoc(x.d.id))}>Dupliquer</button>
+      <button className="lnk" onClick={(e) => act(e, () => setArch([...arch, x.d.id]))}>Archiver</button></>}</div>;
+  const key = (e, id) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDoc(id); } };
+  const Card = ({ x }) => <div className="tk wf" role="button" tabIndex={0} onClick={() => openDoc(x.d.id)} onKeyDown={(e) => key(e, x.d.id)} aria-label={`Ouvrir ${x.d.title} dans le Studio`}>
+    <div className="tk-h"><b>{x.d.title}</b><span className="chip">{x.v}</span></div>
+    <span className="tk-s">{x.d.subtitle}</span>
+    <div className="tk-m"><span>{x.steps} étapes{x.par ? ` · ${x.par} parallèle${x.par > 1 ? 's' : ''}` : ''}</span><span className={x.bad ? 'bad' : 'okt'}>{x.bad ? `⚠ ${x.bad} à corriger` : '✓ Valide'}</span></div>
+    {x.open > 0 && <div className="tk-m"><span className="warnt">💬 {x.open} commentaire{x.open > 1 ? 's' : ''} à traiter</span></div>}
+    <Actions x={x} /></div>;
   return <>
-    <p className="sub mt-sub">Vos tâches terrain : un workflow assigné à un site, avec une échéance. Les workflows eux-mêmes se gèrent dans l’onglet Équipe et dans le Studio.</p>
-    <div className="kpis kpis5">{kp.map(([k, l, v, d]) => <button className={cls('kpi', 'kbtn2', k === 'late' && v > 0 && 'warn', stF === k && 'sel')} key={k} onClick={() => setStF(stF === k ? 'all' : k)} aria-pressed={stF === k} title="Filtrer"><span className="kl">{l}</span><b>{v}</b><em className="kd">{d}</em></button>)}</div>
+    <p className="sub mt-sub">Les workflows que vous créez et gérez : brouillon, relecture par le client, activation. Un clic sur un workflow l’ouvre dans le Studio.</p>
+    <div className="kpis kpis5">{kp.map(([k, l, v, d]) => <button className={cls('kpi', 'kbtn2', k === 'bad' && v > 0 && 'warn', f === k && 'sel')} key={k} onClick={() => setF(f === k ? 'all' : k)} aria-pressed={f === k} title="Filtrer"><span className="kl">{l}</span><b>{v}</b><em className="kd">{d}</em></button>)}</div>
     <section className="card tkb">
       <div className="tk-bar">
-        <input className="in" placeholder="Rechercher une tâche ou un site…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="fsl" value={wfF} onChange={(e) => setWfF(e.target.value)} aria-label="Workflow"><option value="">Tous les workflows</option>{mains.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</select>
-        <select className="fsl" value={siteF} onChange={(e) => setSiteF(e.target.value)} aria-label="Site"><option value="">Tous les sites</option>{sites.map((x) => <option key={x}>{x}</option>)}</select>
+        <input className="in" placeholder="Rechercher un workflow…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="btn pri sm" onClick={newFlow}><Ic n="plus" s={14} />Nouveau workflow</button>
         <div className="seg sm lvseg2" role="tablist" aria-label="Affichage"><button role="tab" aria-selected={lay === 'board'} className={lay === 'board' ? 'on' : ''} onClick={() => setLay('board')}>Tableau</button><button role="tab" aria-selected={lay === 'list'} className={lay === 'list' ? 'on' : ''} onClick={() => setLay('list')}>Liste</button></div>
       </div>
-      <div className="tk-bar2">
-        <div className="wfchips" role="group" aria-label="Filtrer par statut">{[['all', 'Toutes', tasks.length], ['assigned', 'Assigné', tasks.filter(byStF.assigned).length], ['progress', 'En cours', tasks.filter(byStF.progress).length], ['done', 'Terminé', tasks.filter(byStF.done).length], ['sync', 'À synchroniser', pend.length], ['late', 'En retard', late]].map(([k, l, n]) => <button key={k} className={stF === k ? 'on' : ''} onClick={() => setStF(k)}>{l}<i>{n}</i></button>)}</div>
-        <div className="tk-r">{active && <button className="lnk" onClick={reset}>Réinitialiser les filtres</button>}
-          <button className="btn pri sm" disabled={!pend.length || pend.every((t) => busy.includes(t.id))} onClick={() => syncIds(pend.filter((t) => !busy.includes(t.id)).map((t) => t.id))}>Synchroniser tout ({pend.length})</button></div>
-      </div>
-      {lay === 'board'
-        ? <div className="kan">{['assigned', 'progress', 'done'].map((st) => <div key={st} className={'kcol ' + st}><div className="kh"><i />{TS[st]}<em>{col(st).length}</em></div>
-            {col(st).map((t) => <Card key={t.id} t={t} />)}{!col(st).length && <p className="k-e">Aucune tâche</p>}</div>)}</div>
-        : <div className="tbl"><table><thead><tr><th>Tâche</th><th>Site</th><th>Échéance</th><th>Statut</th><th>Progression</th><th /></tr></thead><tbody>
-          {[...list].sort((a, b) => a.due - b.due).map((t) => { const lt = isLate(t); return <tr key={t.id}><td><b>{title(t)}</b>{t.fresh && <span className="chip newc">Nouveau</span>}</td><td>{t.site}</td><td className={lt ? 'bad' : ''}>{t.status === 'done' ? '—' : dueTxt(t.due)}</td>
-            <td><span className={'chip st ' + (t.status === 'done' ? 'okc' : t.status === 'progress' ? 'warnc' : '')}><i />{TS[t.status]}{isPend(t) ? ' · à synchroniser' : t.status === 'done' ? ' · synchronisé' : ''}</span></td><td>{t.status === 'assigned' ? '—' : t.p + ' %'}</td>
-            <td className="num">{t.status === 'assigned' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'progress', p: 10 })}>Démarrer</button>}{t.status === 'progress' && <button className="btn sm pri" onClick={() => move(t.id, { status: 'done', p: 100, sync: 'pending' })}>Terminer</button>}{isPend(t) && <SyncBtn t={t} />}</td></tr>; })}
-          {!list.length && <tr><td colSpan={6} className="empty-row">Aucune tâche pour ces filtres.</td></tr>}</tbody></table></div>}
+      <div className="tk-bar2"><div className="wfchips" role="group" aria-label="Filtrer">{[['all', 'Tous', live.length], ['draft', 'Brouillon', n('draft')], ['review', 'En relecture', n('review')], ['active', 'Activé', n('active')], ['bad', 'À corriger', n('bad')], ['arch', 'Archivés', arch.length]].map(([k, l, c]) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>{l}<i>{c}</i></button>)}</div>
+        {(q || f !== 'all') && <button className="lnk" onClick={() => { setQ(''); setF('all'); }}>Réinitialiser les filtres</button>}</div>
+      {lay === 'board' && f !== 'arch'
+        ? <div className="kan">{['draft', 'review', 'active'].map((st) => { const items = list.filter((x) => x.stage === st); return <div key={st} className={'kcol ' + st}><div className="kh"><i />{STAGES[st]}<em>{items.length}</em></div>{items.map((x) => <Card key={x.d.id} x={x} />)}{!items.length && <p className="k-e">Aucun workflow</p>}</div>; })}</div>
+        : <div className="tbl"><table><thead><tr><th>Workflow</th><th>État</th><th>Version</th><th>Contrôles</th><th>Commentaires</th><th /></tr></thead><tbody>
+          {list.map((x) => <tr key={x.d.id} className="tr-link" onClick={() => openDoc(x.d.id)}><td><b>{x.d.title}</b><div className="mut sm">{x.d.subtitle}</div></td><td><span className={'chip st ' + (x.stage === 'active' ? 'actc' : x.stage === 'review' ? 'warnc' : '')}><i />{STAGES[x.stage]}</span></td><td>{x.v}</td>
+            <td><span className={x.bad ? 'badt' : 'okt'}>{x.bad ? `⚠ ${x.bad}` : '✓ Valide'}</span></td><td>{x.open || '—'}</td><td className="num"><Actions x={x} /></td></tr>)}
+          {!list.length && <tr><td colSpan={6} className="empty-row">Aucun workflow pour ces filtres.</td></tr>}</tbody></table></div>}
     </section>
   </>;
 }
@@ -821,7 +821,7 @@ const niceTop = (m) => { const step = m > 200 ? 100 : m > 60 ? 30 : 10; return M
 const sgn = (n, u) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n) + u;
 const EXECS = [['Inventaire magasin', 'Carrefour Wavre', 'Marie D.', 'Terminé', '6 min 12'], ['Visite stock hebdo', 'Carrefour Wavre', 'Paul M.', 'Terminé', '9 min 40'], ['Visite stock hebdo', 'Carrefour Namur', 'Sophie L.', 'En cours', '—'], ['Entrée de stock', 'Entrepôt Liège', 'Cyril R.', 'En attente de sync', '7 min 03'], ['Visite stock hebdo', 'Delhaize Ottignies', 'Marc T.', 'Terminé', '8 min 51'], ['Inventaire magasin', 'Delhaize Namur', 'Cyril R.', 'Terminé', '7 min 02'], ['Entrée de stock', 'Entrepôt Liège', 'Marie D.', 'Terminé', '5 min 44']];
 
-function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, tasks, setTasks }) {
+function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
   const [dtab, setDtab] = React.useState('team');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const [mode, setMode] = React.useState('custom'); const [off, setOff] = React.useState(0); const [cmp, setCmp] = React.useState('prev');
@@ -905,7 +905,7 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, tasks, setTasks 
     <footer className="dfoot"><span>Périmètre : équipe · Tous les sites · Du {fdate(P.start, { day: 'numeric', month: 'long' })} au {fdate(P.end, { day: 'numeric', month: 'long' })}</span><span>Durées exprimées en minutes et secondes</span></footer>
   </>;
 
-  const myView = <MyTasks wfs={wfs} tasks={tasks} setTasks={setTasks} openDoc={openDoc} setView={setView} />;
+  const myView = <MyWorkflows wfs={wfs} openDoc={openDoc} openAdmin={openAdmin} newFlow={newFlow} {...mgmt} />;
 
   return <div className="page dash">
     <header className="pg-h">
