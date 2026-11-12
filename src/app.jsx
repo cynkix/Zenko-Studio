@@ -595,11 +595,14 @@ function PlayView({ eng, api, ver, dnodes, dedges, ctx, root, solo, setSolo, aut
 
 /* ------------------------------------------------------------------ Mobile demo */
 function MobileDemo({ e, api, wfs, width, ver }) {
-  const [scr, setScr] = useState('inbox'); const [synced, setSynced] = useState({});
+  const [scr, setScr] = useState('inbox'); const [st, setSt] = useState({}); // st[id] = 'pending' | 'synced'
+  const [tab, setTab] = useState('tasks'); const [off, setOff] = useState(true); const [syncing, setSyncing] = useState(false);
   const [cur, setCur] = useState(null);
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const start = (id) => { setCur(id); api.restart(id); setScr('run'); };
-  const done = () => { setSynced((s) => ({ ...s, [cur]: true })); setScr('inbox'); };
+  const done = () => { setSt((s) => ({ ...s, [cur]: 'pending' })); setTab('tasks'); setScr('inbox'); };
+  const pend = Object.keys(st).filter((k) => st[k] === 'pending');
+  const syncNow = () => { if (off || !pend.length) return; setSyncing(true); setTimeout(() => { setSt((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v === 'pending' ? 'synced' : v]))); setSyncing(false); }, 1100); };
   const data = e ? Object.entries(e.data).filter(([k]) => !k.startsWith('__')) : [];
   return <div className="mob">
     <div className="mob-side">
@@ -611,12 +614,25 @@ function MobileDemo({ e, api, wfs, width, ver }) {
     <div className="mob-stage">
       {scr === 'inbox' || !e
         ? <FitBox w={PW + 20} h={PH + 40}><div className="phone"><div className="ph-notch" />
-          <div className="ph-top"><div className="ph-ttl"><b>Mes tâches</b><span>Cyril R. · 2 tâches</span></div><span className="ph-off">hors ligne</span></div>
-          <div className="ph-body inbox">{mains.map((d) => { const f = d.nodes.filter((n) => n.type === 'fork').length; return <button key={d.id} className="ib-card" onClick={() => start(d.id)}>
-            <div className="ib-h"><b>{d.title}</b><span className={cls('chip', synced[d.id] && 'okc')}>{synced[d.id] ? 'Synchronisée' : 'À faire'}</span></div>
+          <div className="ph-top"><div className="ph-ttl"><b>{{ tasks: 'Mes tâches', sync: 'Synchronisation', profile: 'Profil' }[tab]}</b><span>{tab === 'tasks' ? `Cyril R. · ${mains.length} tâches` : tab === 'sync' ? (off ? 'Hors ligne' : 'En ligne') : 'Responsable magasin'}</span></div><button className={cls('ph-off', !off && 'on')} onClick={() => setOff(!off)} title="Basculer en ligne / hors ligne (démo)">{off ? 'hors ligne' : 'en ligne'}</button></div>
+          {tab === 'tasks' && <div className="ph-body inbox">{mains.map((d) => { const f = d.nodes.filter((n) => n.type === 'fork').length; return <button key={d.id} className="ib-card" onClick={() => start(d.id)}>
+            <div className="ib-h"><b>{d.title}</b><span className={cls('chip', st[d.id] === 'synced' && 'okc')}>{st[d.id] === 'synced' ? 'Synchronisée' : st[d.id] === 'pending' ? 'À synchroniser' : 'À faire'}</span></div>
             <span className="ib-s">{d.subtitle}</span>
-            <div className="ib-m"><span>{d.nodes.filter((n) => n.type === 'step').length} étapes</span>{f ? <span className="par"><Ic n="branch" s={12} />{f} bloc parallèle</span> : null}<span>{d.noun}</span></div></button>; })}</div>
-          <div className="ph-nav"><button className="ph-nav-btn active"><Ic n="inbox" s={20} /><span>Tâches</span></button><button className="ph-nav-btn sync"><Ic n="restart" s={20} /><span className="ph-sync-dot" /><span>Synchro</span></button><button className="ph-nav-btn"><Ic n="user" s={20} /><span>Profil</span></button></div></div></FitBox>
+            <div className="ib-m"><span>{d.nodes.filter((n) => n.type === 'step').length} étapes</span>{f ? <span className="par"><Ic n="branch" s={12} />{f} bloc parallèle</span> : null}<span>{d.noun}</span></div></button>; })}</div>}
+          {tab === 'sync' && <div className="ph-body mp">
+            <div className={cls('mp-st', !off && 'ok')}><Ic n={off ? 'restart' : 'check'} s={20} /><div><b>{off ? 'Hors ligne' : syncing ? 'Synchronisation…' : 'Connecté'}</b><small>{off ? 'Vos saisies restent sur l’appareil.' : 'Dernière synchro : à l’instant'}</small></div></div>
+            <div className="mp-h">À envoyer ({pend.length})</div>
+            {pend.length ? pend.map((k) => <div key={k} className="mp-row"><b>{wfs[k].title}</b><small>{wfs[k].noun} terminée</small></div>) : <p className="mp-e">Rien en attente.</p>}
+            {off && pend.length > 0 && <p className="mp-hint">Passez en ligne (badge en haut) pour envoyer.</p>}
+            <button className="pf-cta" disabled={off || !pend.length || syncing} onClick={syncNow}>{syncing ? 'Envoi…' : 'Synchroniser maintenant'}</button></div>}
+          {tab === 'profile' && <div className="ph-body mp">
+            <div className="mp-me"><span className="av" style={{ '--t': 'var(--bb)', width: 52, height: 52 }}>CR</span><div><b>Cyril R.</b><small>Responsable magasin · Carrefour Wavre</small></div></div>
+            <div className="mp-h">Appareil</div>
+            <div className="mp-row"><b>Mode hors ligne</b><small>{off ? 'Actif' : 'Désactivé'}</small></div>
+            <div className="mp-row"><b>Workflows disponibles</b><small>{mains.length}</small></div>
+            <div className="mp-row"><b>Version de l’app</b><small>Zenko 1.0 (démo)</small></div>
+            <button className="pf-back full" onClick={() => setTab('tasks')}>Se déconnecter</button></div>}
+          <div className="ph-nav">{[['tasks', 'inbox', 'Tâches'], ['sync', 'restart', 'Synchro'], ['profile', 'user', 'Profil']].map(([k, ic, l]) => <button key={k} className={cls('ph-nav-btn', tab === k && 'active')} onClick={() => setTab(k)}><Ic n={ic} s={20} /><span>{l}</span>{k === 'sync' && pend.length > 0 && <span className="ph-sync-dot" />}</button>)}</div></div></FitBox>
         : <PlayStage e={e} api={api} solo onDone={done} />}
     </div>
   </div>;

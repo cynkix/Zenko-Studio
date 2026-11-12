@@ -487,3 +487,14 @@ h1, h2, h3, .t, .logo { font-family: var(--f-disp); }
 .empty-row { text-align: center; color: var(--mut); padding: 16px !important; }
 .warnc { background: var(--warn-soft, var(--ok-soft)); color: var(--warn); }
 .card-h { display: flex; align-items: center; gap: 10px; }
+
+/* mobile : écrans Synchro et Profil */
+.ph-off { background: none; cursor: pointer; } .ph-off.on { color: var(--ok); border-color: var(--ok); }
+.ph-body.mp { padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.mp-st { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; background: var(--surface2); border: 1px solid var(--line); color: var(--warn); }
+.mp-st.ok { color: var(--ok); } .mp-st b { display: block; color: var(--fg); font-size: 14px; } .mp-st small, .mp-row small, .mp-me small { color: var(--mut); font-size: 12px; }
+.mp-h { font: 700 11px var(--f-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--mut); margin-top: 4px; }
+.mp-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); } .mp-row b { font-size: 13px; }
+.mp-e, .mp-hint { margin: 0; font-size: 12.5px; color: var(--mut); } .mp-hint { color: var(--warn); }
+.mp-me { display: flex; gap: 12px; align-items: center; } .mp-me b { display: block; font-size: 15px; }
+.ph-body.mp .pf-cta, .ph-body.mp .pf-back { margin-top: auto; } .ph-body.mp .pf-cta:disabled { opacity: .45; }
