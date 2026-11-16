@@ -643,3 +643,7 @@ h3.sp-t { font: 700 13px var(--f-disp); margin: 22px 0 10px; padding-top: 14px; 
   .c-watch .watch { margin-bottom: 0; }
   .c-watch > .btn.block { margin-top: 4px; width: auto; justify-self: start; padding-left: 28px; padding-right: 28px; }
 }
+
+/* Suppression d'un workflow / d'une sous-routine */
+.lnk.dng { color: var(--err); } .dz { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--line2); display: flex; flex-direction: column; gap: 8px; }
+.dz .btn.dng { width: 100%; justify-content: center; } .dz .btn[aria-disabled="true"] { opacity: .5; }

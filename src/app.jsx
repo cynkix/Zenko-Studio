@@ -174,6 +174,18 @@ function App() {
   };
   const deactivateDoc = (id) => { const d = wfsRef.current[id]; const m = (d.status || '').match(/v(\d+)/); commit({ ...wfsRef.current, [id]: { ...d, status: `Brouillon · v${(m ? parseInt(m[1]) : 1) + 1}` } }); };
   const dupDoc = (id) => { const nid = 'copy' + Math.random().toString(36).slice(2, 5); const d = wfsRef.current[id]; commit({ ...wfsRef.current, [nid]: { ...d, id: nid, title: d.title + ' (copie)', status: 'Brouillon · v1', history: [] } }); say('Workflow dupliqué'); };
+  /* suppression d'un workflow ou d'une sous-routine (avec garde-fous + confirmation, annulable avec ⌘Z) */
+  const [askDel, setAskDel] = useState(null);
+  const canDelete = (id) => { const w = wfsRef.current; const d = w[id]; if (!d) return { ok: false, why: '' };
+    if (d.kind === 'sub') { const u = usageOf(w, id); return u.uses ? { ok: false, why: `Utilisée par ${u.uses} boucle${u.uses > 1 ? 's' : ''} (${u.docs} workflow${u.docs > 1 ? 's' : ''}) : retirez d’abord ces boucles.` } : { ok: true }; }
+    if ((d.status || '').startsWith('Actif')) return { ok: false, why: 'Un workflow activé est en production : repassez-le en brouillon (« Modifier ») ou archivez-le.' };
+    if (Object.values(w).filter((x) => x.kind === 'main').length <= 1) return { ok: false, why: 'Gardez au moins un workflow.' };
+    return { ok: true }; };
+  const requestDelete = (id) => { const c = canDelete(id); if (!c.ok) { say(c.why); return; } setAskDel(id); };
+  const doDelete = () => { const id = askDel; setAskDel(null); const w = { ...wfsRef.current }; const d = w[id]; if (!d) return; delete w[id];
+    const next = Object.values(w).find((x) => x.kind === 'main'); commit(w); setSel(null); setDual(false); setFocus(null); setMode('edit');
+    if (d.kind === 'main') { setRootId(next.id); setDocId(next.id); } else if (docId === id) setDocId(rootId);
+    say(`« ${d.title} » supprimé · ${MOD === '⌘' ? '⌘' : 'Ctrl+'}Z pour annuler`); };
   const duplicateFlow = () => {
     const id = 'copy' + Math.random().toString(36).slice(2, 5); const d = wfsRef.current[rootId];
     commit({ ...wfsRef.current, [id]: { ...d, id, title: d.title + ' (copie)', status: 'Brouillon · v1' } }); openDoc(id); say('Flux dupliqué');
@@ -314,12 +326,12 @@ function App() {
   return <div className={layoutCls} onClick={() => { setMenu(null); }}>
     <Markers />
     <TopBar {...{ collab, setCollab, people, setPeople, review, setReview, say, newFlow: () => setNewOpen(true), view, setView, mode, goPlay, goEdit, wfs, doc, docId, rootId, openDoc, okAll, checks, undo, redo, hist: hist.current, setPal, theme, setThemeS, density, setDensity, dir, setDir, minimap, setMinimap, bp, drawer, setDrawer, menu, setMenu, setInspTab, setSideTab, struct, activate, deactivate, activating }} />
-    {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} openAdmin={(k, id) => { setAdmWf(id || null); setAdm(k); }} mgmt={{ comments, rev, setRev, arch, setArch, activateDoc, deactivateDoc, dupDoc }} />
+    {view === 'dashboard' ? <Dashboard wfs={wfs} openDoc={(id) => { setView('studio'); openDoc(id); }} setView={setView} newFlow={() => setNewOpen(true)} openAdmin={(k, id) => { setAdmWf(id || null); setAdm(k); }} mgmt={{ comments, rev, setRev, arch, setArch, activateDoc, deactivateDoc, dupDoc, requestDelete, canDelete }} />
       : view === 'mobile'
       ? <MobileDemo e={eng} api={api} wfs={wfs} width={width} ver={ver} assigns={assigns} datasets={datasets} />
       : <div className={cls('work', mode === 'play' && 'is-play')}>
         <aside className="side">
-          <Sidebar {...{ addBlock, wfs, doc, docId, rootId, openDoc, sideTab, setSideTab, sel, setSel, setFocus, addAfterSel, duplicateFlow, mode, setMode, setDocId, bp, setDrawer }} />
+          <Sidebar {...{ requestDelete, addBlock, wfs, doc, docId, rootId, openDoc, sideTab, setSideTab, sel, setSel, setFocus, addAfterSel, duplicateFlow, mode, setMode, setDocId, bp, setDrawer }} />
         </aside>
         <main className="center">
           {mode === 'edit' && <>
@@ -340,7 +352,7 @@ function App() {
           </>}
           {mode === 'play' && <PlayView {...{ eng, api, ver, dnodes, dedges, ctx, root, solo: solos, setSolo, auto, setAuto, panel, setPanel, showPanel, setShowPanel, onChanges, bp, struct, docId, dir }} />}
         </main>
-        {mode === 'edit' && <aside className="insp"><Inspector {...{ doc, wfs, selNode, info, inspTab, setInspTab, checks, updateNode, updateDoc, del, edit, openSub, setSel, setFocus, setDual: () => openPar((forks[0] || {fork:{}}).fork.id), openPar, hasFork, collab, comments, setComments, people, addStep, say, detachSub }} /></aside>}
+        {mode === 'edit' && <aside className="insp"><Inspector {...{ doc, wfs, selNode, info, inspTab, setInspTab, checks, updateNode, updateDoc, del, edit, openSub, setSel, setFocus, setDual: () => openPar((forks[0] || {fork:{}}).fork.id), openPar, hasFork, collab, comments, setComments, people, addStep, say, detachSub, requestDelete, canDelete }} /></aside>}
         {dockOn && eng && <aside className="dock">
           <div className="dock-h"><b>Aperçu live</b><span>{eng.preview ? `Étape : ${(selNode && selNode.data.label) || ''}` : root.title}</span>
             <button className="ib" onClick={() => api.restart(undefined, eng.preview && selNode && selNode.type === 'step' ? { docId, nodeId: selNode.id } : undefined)} title="Rejouer"><Ic n="restart" s={15} /></button>
@@ -352,6 +364,10 @@ function App() {
       </div>}
     {newOpen && <NewFlow close={() => setNewOpen(false)} create={createFlow} />}
     {adm === 'assign' && <AssignModal initial={admWf} mains={Object.values(wfs).filter((d) => d.kind === 'main')} close={() => setAdm(null)} onAssign={(a) => { setAssigns((x) => [...x, a]); say(`« ${wfs[a.wf].title} » assigné à ${a.members.length} personne(s)`); }} />}
+    {askDel && wfs[askDel] && (() => { const d = wfs[askDel]; const n = d.nodes.filter((x) => x.type === 'step').length; return <div className="pal-bg" onMouseDown={() => setAskDel(null)}><div className="modal" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Confirmer la suppression">
+      <header><h2>Supprimer « {d.title} » ?</h2><button className="ib" onClick={() => setAskDel(null)} aria-label="Fermer"><Ic n="x" s={16} /></button></header>
+      <div className="m-b"><p className="hintp" style={{ marginTop: 0 }}>{d.kind === 'sub' ? 'Cette sous-routine n’est utilisée par aucune boucle.' : `Le workflow (${n} étape${n > 1 ? 's' : ''}) disparaît du Studio, du tableau de bord et de l’app mobile.`} Vous pourrez annuler juste après avec {MOD === '⌘' ? '⌘' : 'Ctrl+'}Z.</p></div>
+      <footer><button className="btn" onClick={() => setAskDel(null)}>Annuler</button><button className="btn dng" onClick={doDelete} autoFocus><Ic n="trash" s={14} />Supprimer</button></footer></div></div>; })()}
     {adm === 'data' && <DatasetsModal datasets={datasets} setDatasets={setDatasets} close={() => setAdm(null)} say={say} />}
     {addMenu && <AddMenu m={addMenu} close={() => setAddMenu(null)} pick={(t) => { setAddMenu(null); addOnEdge(addMenu.edgeId, t); }} />}
     {pal && <Palette items={commands()} close={() => setPal(false)} />}
@@ -425,7 +441,7 @@ function TopBar({ collab, setCollab, people, setPeople, review, setReview, say, 
 function Seg({ value, set, opts }) { return <div className="seg sm">{opts.map(([v, l]) => <button key={v} className={value === v ? 'on' : ''} onClick={() => set(v)}>{l}</button>)}</div>; }
 
 /* ------------------------------------------------------------------ Sidebar */
-function Sidebar({ addBlock, wfs, doc, docId, rootId, openDoc, sideTab, setSideTab, sel, setSel, setFocus, addAfterSel, duplicateFlow, mode, bp, setDrawer, setDocId }) {
+function Sidebar({ requestDelete, addBlock, wfs, doc, docId, rootId, openDoc, sideTab, setSideTab, sel, setSel, setFocus, addAfterSel, duplicateFlow, mode, bp, setDrawer, setDocId }) {
   const mains = Object.values(wfs).filter((d) => d.kind === 'main'); const subs = Object.values(wfs).filter((d) => d.kind === 'sub');
   const rows = useMemo(() => outline(doc), [doc]);
   const tabs = [['flux', 'Flux', 'flow'], ['plan', 'Plan', 'list'], ['add', 'Ajouter', 'plus']];
@@ -441,7 +457,8 @@ function Sidebar({ addBlock, wfs, doc, docId, rootId, openDoc, sideTab, setSideT
         <button className="li ghost" onClick={duplicateFlow}><Ic n="copy" s={14} />Dupliquer ce flux</button>
         <div className="sh">Sous-routines</div>
         {subs.map((d) => { const u = usageOf(wfs, d.id); return <div key={d.id} className="li-wrap"><button className={cls('li', docId === d.id && 'on')} onClick={() => { setDocId(d.id); setSel(null); if (bp === 's') setDrawer(null); }}><span className="li-t"><b className="mono">{d.title}</b><span>paramètre {'{' + d.param + '}'}</span></span><span className="li-m"><span className="mut">{stepsOf(d)} étapes · {u.uses ? `utilisé dans ${u.docs} workflow${u.docs > 1 ? 's' : ''}` : 'non utilisé'}</span></span></button>
-          <button className="li-add" title="Insérer ce bloc à la fin du workflow ouvert" onClick={() => addBlock(d.id)}><Ic n="plus" s={13} sw={2.4} />Insérer</button></div>; })}
+          <button className="li-add" title="Insérer ce bloc à la fin du workflow ouvert" onClick={() => addBlock(d.id)}><Ic n="plus" s={13} sw={2.4} />Insérer</button>
+          <button className="li-add" title="Supprimer cette sous-routine" aria-label={`Supprimer ${d.title}`} onClick={() => requestDelete(d.id)}><Ic n="trash" s={13} /></button></div>; })}
         <p className="hintp">Blocs réutilisables : une même sous-routine peut servir dans plusieurs workflows. Sur le canvas, « Déplier » affiche ses étapes en place.</p>
       </>}
       {sideTab === 'plan' && <>
@@ -465,7 +482,7 @@ function Sidebar({ addBlock, wfs, doc, docId, rootId, openDoc, sideTab, setSideT
 function Fld({ l, children, help }) { return <label className="fld"><span className="fl">{l}</span>{children}{help && <span className="fh">{help}</span>}</label>; }
 function Tog({ l, v, set }) { return <label className="tog"><input type="checkbox" checked={!!v} onChange={(e) => set(e.target.checked)} /><i />{l}</label>; }
 
-function Inspector({ doc, wfs, selNode, info, inspTab: tab0, setInspTab, checks, updateNode, updateDoc, del, edit, openSub, setSel, setFocus, setDual, openPar, hasFork, collab, comments, setComments, people, addStep, say, detachSub }) {
+function Inspector({ doc, wfs, selNode, info, inspTab: tab0, setInspTab, checks, updateNode, updateDoc, del, edit, openSub, setSel, setFocus, setDual, openPar, hasFork, collab, comments, setComments, people, addStep, say, detachSub, requestDelete, canDelete }) {
   const bad = checks.filter((c) => !c.ok).length;
   const nOpen = collab.on ? doc.nodes.reduce((s, n) => s + (comments[`${doc.id}:${n.id}`] || []).filter((c) => !c.done).length, 0) : 0;
   const tabs = [['step', 'Étape'], ...(collab.on ? [['comments', 'Commentaires']] : []), ...(collab.bot ? [['bot', 'Assistant']] : [])];
@@ -482,6 +499,7 @@ function Inspector({ doc, wfs, selNode, info, inspTab: tab0, setInspTab, checks,
               <Fld l="Nom terrain" help="Affiché dans l’app mobile."><select className="in" value={doc.noun} onChange={(e) => updateDoc({ noun: e.target.value })}>{[' Inventaire', 'Visite', 'Réception', 'Contrôle'].map((x) => <option key={x}>{x}</option>)}</select></Fld></>}
             {doc.kind === 'sub' && <Fld l="Paramètre reçu"><input className="in mono" value={doc.param} onChange={(e) => updateDoc({ param: e.target.value })} /></Fld>}
             <div className="stats"><div><b>{doc.nodes.filter((n) => n.type === 'step').length}</b><span>étapes</span></div><div><b>{doc.nodes.filter((n) => n.type === 'loop').length}</b><span>boucles</span></div><div><b>{doc.nodes.filter((n) => n.type === 'fork').length}</b><span>parallèles</span></div></div>
+            <div className="dz"><button className="btn dng" onClick={() => requestDelete(doc.id)} aria-disabled={!canDelete(doc.id).ok} title={canDelete(doc.id).ok ? '' : canDelete(doc.id).why}><Ic n="trash" s={14} />{doc.kind === 'sub' ? 'Supprimer cette sous-routine' : 'Supprimer ce workflow'}</button>{!canDelete(doc.id).ok && <p className="hintp">{canDelete(doc.id).why}</p>}</div>
           </div></>)}
       {inspTab === 'comments' && <CommentsTab {...{ doc, sel: selNode && selNode.id, setSel, comments, setComments, people, can: true }} />}
       {inspTab === 'bot' && <AssistantTab {...{ doc, checks, addStep, say }} />}
@@ -742,7 +760,7 @@ function parseLine(raw) {
 
 /* ---- « Mes workflows » : les workflows que je crée et que je gère (brouillon → relecture → activé) ---- */
 const STAGES = { draft: 'Brouillon', review: 'En relecture', active: 'Activé' };
-function MyWorkflows({ wfs, openDoc, openAdmin, newFlow, comments, rev, setRev, arch, setArch, activateDoc, deactivateDoc, dupDoc }) {
+function MyWorkflows({ wfs, openDoc, openAdmin, newFlow, comments, rev, setRev, arch, setArch, activateDoc, deactivateDoc, dupDoc, requestDelete, canDelete }) {
   const [q, setQ] = React.useState(''); const [f, setF] = React.useState('all'); const [lay, setLay] = React.useState('board');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const info = (d) => { const bad = validate(wfs, d).filter((c) => !c.ok).length; const open = Object.entries(comments).filter(([k, v]) => k.startsWith(d.id + ':') && v.some((c) => !c.done)).reduce((a, [, v]) => a + v.filter((c) => !c.done).length, 0);
@@ -754,12 +772,12 @@ function MyWorkflows({ wfs, openDoc, openAdmin, newFlow, comments, rev, setRev, 
   const n = (k) => live.filter(pred[k]).length; const act = (e, fn) => { e.stopPropagation(); fn(); };
   const kp = [['draft', 'Brouillons', n('draft'), 'en cours d’écriture'], ['review', 'En relecture', n('review'), 'chez le client'], ['active', 'Activés', n('active'), 'en production'], ['bad', 'À corriger', n('bad'), n('bad') ? 'contrôles en échec' : 'tout est valide'], ['cm', 'Commentaires', live.reduce((a, x) => a + x.open, 0), 'à traiter']];
   const Actions = ({ x }) => <div className="tk-a">
-    {x.gone ? <button className="btn sm" onClick={(e) => act(e, () => setArch(arch.filter((i) => i !== x.d.id)))}>Restaurer</button> : <>
+    {x.gone ? <><button className="btn sm" onClick={(e) => act(e, () => setArch(arch.filter((i) => i !== x.d.id)))}>Restaurer</button><button className="lnk dng" onClick={(e) => act(e, () => requestDelete(x.d.id))}>Supprimer</button></> : <>
       {x.stage === 'draft' && (x.bad ? <button className="btn sm pri" onClick={(e) => act(e, () => openDoc(x.d.id))}>Corriger</button> : <><button className="btn sm pri" onClick={(e) => act(e, () => activateDoc(x.d.id))}>Activer</button><button className="btn sm" onClick={(e) => act(e, () => setRev({ ...rev, [x.d.id]: 'review' }))}>Envoyer en relecture</button></>)}
       {x.stage === 'review' && <><button className="btn sm pri" onClick={(e) => act(e, () => activateDoc(x.d.id))} disabled={!!x.bad}>Valider et activer</button><button className="btn sm" onClick={(e) => act(e, () => { const r = { ...rev }; delete r[x.d.id]; setRev(r); })}>Retour brouillon</button></>}
       {x.stage === 'active' && <><button className="btn sm" onClick={(e) => act(e, () => { deactivateDoc(x.d.id); openDoc(x.d.id); })}>Modifier</button><button className="btn sm" onClick={(e) => act(e, () => openAdmin('assign', x.d.id))}>Assigner</button></>}
       <button className="lnk" onClick={(e) => act(e, () => dupDoc(x.d.id))}>Dupliquer</button>
-      <button className="lnk" onClick={(e) => act(e, () => setArch([...arch, x.d.id]))}>Archiver</button></>}</div>;
+      <button className="lnk" onClick={(e) => act(e, () => setArch([...arch, x.d.id]))}>Archiver</button>{x.stage !== 'active' && <button className="lnk dng" onClick={(e) => act(e, () => requestDelete(x.d.id))}>Supprimer</button>}</>}</div>;
   const key = (e, id) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDoc(id); } };
   const Card = ({ x }) => <div className="tk wf" role="button" tabIndex={0} onClick={() => openDoc(x.d.id)} onKeyDown={(e) => key(e, x.d.id)} aria-label={`Ouvrir ${x.d.title} dans le Studio`}>
     <div className="tk-h"><b>{x.d.title}</b><span className="chip">{x.v}</span></div>
