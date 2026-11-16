@@ -5,7 +5,7 @@
 import React from 'react';
 import { Ic } from './icons.jsx';
 
-const WHEN = ['10 nov. · 09:12', '10 nov. · 10:05', '10 nov. · 11:40', '10 nov. · 14:20', '9 nov. · 16:48', '9 nov. · 11:02', '9 nov. · 08:30'];
+const fw = (s) => { const d = new Date(s); return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' · ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 
 /** Champs de saisie d'un workflow, dans l'ordre de lecture du flux. */
 const inputsOf = (doc) => doc.nodes.filter((n) => n.type === 'step' && n.data.kind === 'input')
@@ -28,9 +28,9 @@ function valueOf(n, row, done) {
   }
 }
 
-export function ExecDetail({ row, idx, doc, close, openStudio }) {
-  const [wf, site, op, st, dur] = row;
-  const r = { st, when: WHEN[idx % WHEN.length] };
+export function ExecDetail({ row, doc, close, openStudio }) {
+  const [wf, site, op, st, dur, start] = row;
+  const r = { st, when: fw(start) };
   const fields = doc ? inputsOf(doc) : [];
   const upto = st === 'En cours' ? Math.ceil(fields.length * 0.6) : fields.length;
   const tone = st === 'Terminé' ? 'okc' : st === 'En cours' ? '' : 'warnc';

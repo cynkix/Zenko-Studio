@@ -802,12 +802,12 @@ function periodData(mode, off) {
   const vals = []; const labels = [];
   for (let i = 0; i < N; i++) {
     const d = mode === 'year' ? new Date(start.getFullYear(), start.getMonth() + i, 1) : addDays(start, i);
-    const wk = d.getDay() === 0 || d.getDay() === 6;
+    const sun = d.getDay() === 0; const sat = d.getDay() === 6;
     let v;
     if (mode === 'custom' && off === 0) v = DAYS[i];
     else if (mode === 'day') v = Math.round(5 + rnd(off * 31 + i) * 10);
     else if (mode === 'year') v = Math.round(330 + rnd(off * 17 + i) * 260);
-    else v = Math.round((wk ? 12 : 38) + rnd(off * 53 + i + N) * (wk ? 12 : 26));
+    else v = sun ? Math.round(2 + rnd(off * 53 + i + N) * 6) : sat ? Math.round(14 + rnd(off * 53 + i + N) * 12) : Math.round(38 + rnd(off * 53 + i + N) * 26);
     vals.push(v);
     labels.push(mode === 'day' ? `${8 + i} h` : mode === 'year' ? fdate(d, { month: 'short' }) : mode === 'week' ? fdate(d, { weekday: 'short' }) : (i === 0 || d.getDate() === 1) ? fdate(d) : String(d.getDate()));
   }
@@ -820,14 +820,26 @@ function periodData(mode, off) {
 }
 const niceTop = (m) => { const step = m > 200 ? 100 : m > 60 ? 30 : 10; return Math.ceil(m / step) * step; };
 const sgn = (n, u) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n) + u;
-const EXECS = [['Inventaire magasin', 'Carrefour Wavre', 'Marie D.', 'Terminé', '6 min 12'], ['Visite stock hebdo', 'Carrefour Wavre', 'Paul M.', 'Terminé', '9 min 40'], ['Visite stock hebdo', 'Carrefour Namur', 'Sophie L.', 'En cours', '—'], ['Inventaire magasin', 'Delhaize Ottignies', 'Cyril R.', 'En attente de sync', '7 min 03'], ['Visite stock hebdo', 'Delhaize Ottignies', 'Marc T.', 'Terminé', '8 min 51'], ['Inventaire magasin', 'Delhaize Namur', 'Cyril R.', 'Terminé', '7 min 02'], ['Visite stock hebdo', 'Delhaize Namur', 'Marie D.', 'Terminé', '5 min 44']];
+/* [workflow, site, opérateur, statut, durée, début] — seuls les workflows activés ont des exécutions */
+const EXECS = [
+  ['Inventaire magasin', 'Carrefour Wavre', 'Marie D.', 'Terminé', '6 min 12', '2026-11-10T09:12'],
+  ['Visite stock hebdo', 'Carrefour Wavre', 'Paul M.', 'Terminé', '9 min 40', '2026-11-10T10:05'],
+  ['Visite stock hebdo', 'Carrefour Namur', 'Sophie L.', 'En cours', '—', '2026-11-10T11:40'],
+  ['Inventaire magasin', 'Delhaize Ottignies', 'Cyril R.', 'En attente de sync', '7 min 03', '2026-11-10T14:20'],
+  ['Visite stock hebdo', 'Delhaize Ottignies', 'Marc T.', 'Terminé', '8 min 51', '2026-11-09T16:48'],
+  ['Inventaire magasin', 'Delhaize Namur', 'Cyril R.', 'Terminé', '7 min 02', '2026-11-09T11:02'],
+  ['Visite stock hebdo', 'Delhaize Namur', 'Marie D.', 'Terminé', '5 min 44', '2026-11-09T08:30'],
+];
+const secsOf = (s) => { const m = /(\d+) min (\d+)/.exec(s); return m ? +m[1] * 60 + +m[2] : null; };
+const fwhen = (s) => { const d = new Date(s); return fdate(d) + ' · ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 
 function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
   const [dtab, setDtab] = React.useState('team');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const [mode, setMode] = React.useState('custom'); const [off, setOff] = React.useState(0); const [cmp, setCmp] = React.useState('prev');
   const [lv, setLv] = React.useState('exec'); const [wfF, setWfF] = React.useState('all');
-  const [detail, setDetail] = React.useState(null); const [f, setF] = React.useState({ wf: '', site: '', op: '', st: '' }); const [exported, setExported] = React.useState(false);
+  const [detail, setDetail] = React.useState(null); const [sort, setSort] = React.useState({ k: 'when', dir: 'desc' }); const [menu, setMenu] = React.useState(null);
+  React.useEffect(() => { if (!menu) return undefined; const h = (e) => { if (!e.target.closest('.sth')) setMenu(null); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, [menu]); const [f, setF] = React.useState({ wf: '', site: '', op: '', st: '' }); const [exported, setExported] = React.useState(false);
   const P = React.useMemo(() => periodData(mode, off), [mode, off]);
   const max = Math.max(...P.vals); const top = niceTop(max); const W = 640, H = 190, bw = W / P.N; const showVal = P.N <= 14;
   const cmpTxt = cmp === 'prev' ? 'vs période précédente' : 'vs année précédente';
@@ -837,12 +849,19 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
   const rangeTxt = mode === 'day' ? fdate(P.end, { day: 'numeric', month: 'long' }) : `${fdate(P.start)} – ${fdate(P.end)}`;
   const lenTxt = { day: '1 jour', week: '7 jours', month: '30 jours', year: '12 mois', custom: '14 jours' }[mode];
   const opts = (i) => [...new Set(EXECS.map((r) => r[i]))];
-  const rows = EXECS.filter((r) => (!f.wf || r[0] === f.wf) && (!f.site || r[1] === f.site) && (!f.op || r[2] === f.op) && (!f.st || r[3] === f.st));
+  const SORTV = { when: (r) => r[5], wf: (r) => r[0], site: (r) => r[1], op: (r) => r[2], st: (r) => r[3], dur: (r) => secsOf(r[4]) };
+  const rows = EXECS.filter((r) => (!f.wf || r[0] === f.wf) && (!f.site || r[1] === f.site) && (!f.op || r[2] === f.op) && (!f.st || r[3] === f.st))
+    .sort((a, b) => { const x = SORTV[sort.k](a); const y = SORTV[sort.k](b); if (x === y) return 0; if (x === null) return 1; if (y === null) return -1; const c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'fr'); return sort.dir === 'asc' ? c : -c; });
+  const toggleSort = (k) => setSort(sort.k === k ? { k, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { k, dir: k === 'when' ? 'desc' : 'asc' });
   const exportCsv = () => {
     try { const csv = ['Workflow;Site;Opérateur;Statut;Durée', ...rows.map((r) => r.join(';'))].join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = 'executions.csv'; a.click(); } catch (err) { /* aperçu sans téléchargement */ }
     setExported(true); setTimeout(() => setExported(false), 1800);
   };
-  const FSel = ({ k, label, i }) => <label className="fld"><span>{label}</span><select className="fsl" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}><option value="">Tous</option>{opts(i).map((x) => <option key={x}>{x}</option>)}</select></label>;
+  /* en-tête de colonne : un clic trie, l'icône filtre ouvre la liste des valeurs (une seule barre, plus de doublon) */
+  const colHead = (k, label, i, num) => <th key={k} className={'sth' + (num ? ' num' : '')} aria-sort={sort.k === k ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <span className="thw"><button className={'sbtn' + (sort.k === k ? ' on' : '')} onClick={() => toggleSort(k)} title="Trier">{label}<span className={'sarr' + (sort.k === k && sort.dir === 'asc' ? ' up' : '')}><Ic n={sort.k === k ? 'down' : 'updown'} s={12} /></span></button>
+      {i != null && <button className={'fbtn' + (f[k] ? ' on' : '')} onClick={() => setMenu(menu === k ? null : k)} aria-label={`Filtrer par ${label.toLowerCase()}`} aria-expanded={menu === k}><Ic n="sliders" s={12} /></button>}</span>
+    {menu === k && <div className="colmenu" role="listbox">{['', ...opts(i)].map((x) => <button key={x} role="option" aria-selected={f[k] === x} className={f[k] === x ? 'on' : ''} onClick={() => { setF({ ...f, [k]: x }); setMenu(null); }}>{x || 'Tous'}</button>)}</div>}</th>;
   const wfMatch = (k) => (d) => k === 'all' || (k === 'act' ? d.status.startsWith('Actif') : k === 'draft' ? d.status.startsWith('Brouillon') : validate(wfs, d).some((c) => !c.ok));
   const wfRows = mains.filter(wfMatch(wfF));
   const drafts = mains.filter((d) => d.status.startsWith('Brouillon') && validate(wfs, d).every((c) => c.ok)).length;
@@ -871,14 +890,14 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
           {P.vals.map((v, i) => { const h = (v / top) * (H - 24); const hi = v === max; return <g key={`${mode}-${off}-${i}`}><rect style={{ '--i': i }} x={36 + i * bw + bw * 0.14} y={H - h} width={bw * 0.72} height={h} rx="3" className={hi ? 'bar hi' : 'bar'} />
             {(showVal || hi) && <text x={36 + i * bw + bw / 2} y={H - h - 6} className={hi ? 'gt hi' : 'gt'} textAnchor="middle">{v}</text>}
             {(P.N <= 14 || i % 3 === 0) && <text x={36 + i * bw + bw / 2} y={H + 20} className="gt" textAnchor="middle">{P.labels[i]}</text>}</g>; })}
-        </svg><p className="cap">{mode === 'year' ? 'Saisonnalité : pic en fin d’année.' : (mode === 'day' ? 'Pic en milieu de matinée.' : 'Les week-ends sont creux.')}</p></section>
+        </svg><p className="cap">{mode === 'year' ? 'Saisonnalité : pic en fin d’année.' : (mode === 'day' ? 'Pic en milieu de matinée.' : 'Samedi réduit, dimanche quasi nul (quelques petits magasins).')}</p></section>
       <section className="card"><h2>Par workflow</h2><p className="sub">Volume d’exécutions sur la période</p>
         {mains.map((d, i) => byWf[i] > 0 && <div className="hbar" key={d.id}><span>{d.title}</span><b>{byWf[i].toLocaleString('fr-FR')}</b><div><i style={{ width: Math.max(0, (byWf[i] / Math.max(...byWf)) * 100) + '%' }} /></div></div>)}
         <h3 className="sp-t">Statuts des exécutions</h3>
         <div className="stk"><i style={{ flex: 92, background: 'var(--ok)' }} /><i style={{ flex: 5, background: 'var(--warn)' }} /><i style={{ flex: 3, background: 'var(--err)' }} /></div>
         <div className="stk-l"><span><i style={{ background: 'var(--ok)' }} />Terminé 92 %</span><span><i style={{ background: 'var(--warn)' }} />En cours 5 %</span><span><i style={{ background: 'var(--err)' }} />Abandonné 3 %</span></div></section>
-      <section className="card c-wide"><div className="card-h"><h2>{lv === 'exec' ? 'Dernières exécutions' : 'Workflows'}</h2>
-        <div className="seg sm lvseg" role="tablist" aria-label="Type de vue"><button role="tab" aria-selected={lv === 'exec'} className={lv === 'exec' ? 'on' : ''} onClick={() => setLv('exec')}>Exécutions</button><button role="tab" aria-selected={lv === 'wf'} className={lv === 'wf' ? 'on' : ''} onClick={() => setLv('wf')}>Workflows</button></div></div>
+      <section className="card c-wide"><div className="card-h"><h2>{lv === 'exec' ? 'Dernières exécutions' : 'Workflows'}</h2></div>
+      <div className="seg sm lvseg lvrow" role="tablist" aria-label="Type de vue"><button role="tab" aria-selected={lv === 'exec'} className={lv === 'exec' ? 'on' : ''} onClick={() => setLv('exec')}>Exécutions<i>{P.tot.toLocaleString('fr-FR')}</i></button><button role="tab" aria-selected={lv === 'wf'} className={lv === 'wf' ? 'on' : ''} onClick={() => setLv('wf')}>Workflows<i>{mains.length}</i></button></div>
       {lv === 'wf' ? <>
         <p className="sub">État de publication · {wfRows.length} workflow{wfRows.length > 1 ? 's' : ''} sur {mains.length}</p>
         <div className="wfchips" role="group" aria-label="Filtrer par état">{[['all', 'Tous'], ['act', 'Activé'], ['draft', 'Brouillon'], ['bad', 'À corriger']].map(([k, l]) => <button key={k} className={wfF === k ? 'on' : ''} onClick={() => setWfF(k)}>{l}<i>{k === 'all' ? mains.length : mains.filter(wfMatch(k)).length}</i></button>)}</div>
@@ -890,14 +909,13 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
         </tbody></table></div>
         <div className="tfoot"><span>{wfRows.length} workflows affichés</span><span>Les brouillons n’ont pas d’exécution</span></div>
       </> : <>
-      <p className="sub">Tous les collaborateurs · les {EXECS.length} exécutions les plus récentes sur {P.tot.toLocaleString('fr-FR')} · cliquez sur une ligne pour voir les réponses saisies</p>
-        <div className="fgrid"><FSel k="wf" label="Workflow" i={0} /><FSel k="site" label="Site" i={1} /><FSel k="op" label="Opérateur" i={2} /><FSel k="st" label="Exécution" i={3} /></div>
-        <div className="tbl"><table><thead><tr><th>Workflow</th><th>Site</th><th>Opérateur</th><th>Exécution</th><th className="num">Durée</th></tr></thead><tbody>
+      <p className="sub">Tous les collaborateurs · {EXECS.length} dernières exécutions sur {P.tot.toLocaleString('fr-FR')}</p>
+        <div className="tbl dense"><table><thead><tr>{colHead('when', 'Début')}{colHead('wf', 'Workflow', 0)}{colHead('site', 'Site', 1)}{colHead('op', 'Opérateur', 2)}{colHead('st', 'Exécution', 3)}{colHead('dur', 'Durée', null, true)}</tr></thead><tbody>
           {rows.map((r, i) => <tr key={r.join('|')} className="tr-link" onClick={() => setDetail(r)}>
-            <td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><span className={'chip st ' + (r[3] === 'Terminé' ? 'okc' : r[3] === 'En cours' ? '' : 'warnc')}><i />{r[3]}</span></td><td className="num">{r[4]}</td></tr>)}
-          {!rows.length && <tr><td colSpan={5} className="empty-row">Aucune exécution pour ces filtres.</td></tr>}
+            <td className="mut">{fwhen(r[5])}</td><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><span className={'chip st ' + (r[3] === 'Terminé' ? 'okc' : r[3] === 'En cours' ? '' : 'warnc')}><i />{r[3]}</span></td><td className="num">{r[4]}</td></tr>)}
+          {!rows.length && <tr><td colSpan={6} className="empty-row">Aucune exécution pour ces filtres.</td></tr>}
         </tbody></table></div>
-        <div className="tfoot"><span>{rows.length} exécutions affichées</span><span>— Exécution en cours</span></div></>}</section>
+        <div className="tfoot"><span>{rows.length} exécution{rows.length > 1 ? 's' : ''} affichée{rows.length > 1 ? 's' : ''}{Object.values(f).some(Boolean) && <> · <button className="lnk" onClick={() => setF({ wf: '', site: '', op: '', st: '' })}>Effacer les filtres</button></>}</span><span>Cliquez sur une ligne pour voir le détail · « — » : en cours</span></div></>}</section>
       <section className="card c-watch"><h2>Workflows à surveiller</h2><p className="sub">{mains.length} workflows · {drafts} brouillon{drafts > 1 ? 's' : ''} prêt{drafts > 1 ? 's' : ''} à activer</p>
         {mains.map((d) => { const bad = validate(wfs, d).filter((c) => !c.ok); const act = d.status.startsWith('Actif'); return <button key={d.id} className="watch" onClick={() => { setView('studio'); openDoc(d.id); }}>
           <span className={'wi ' + (act ? 'ok' : 'warn')}><Ic n={act ? 'check' : 'alert'} s={act ? 14 : 20} sw={act ? 3 : 2} /></span>
@@ -916,7 +934,7 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
         {dtab === 'team' && <div className="pg-b"><button className="btn pill" onClick={() => openAdmin('data')}><Ic n="file" s={14} />Jeux de données</button><button className="btn pill" onClick={() => openAdmin('assign')}><Ic n="users" s={14} />Assigner</button><button className="btn pill" onClick={exportCsv}>{exported ? 'Exporté ✓' : 'Exporter'}</button></div>}</div>
     </header>
     {dtab === 'team' ? teamView : myView}
-    {detail && <ExecDetail row={detail} idx={EXECS.indexOf(detail)} doc={mains.find((d) => d.title === detail[0])} close={() => setDetail(null)}
+    {detail && <ExecDetail row={detail} doc={mains.find((d) => d.title === detail[0])} close={() => setDetail(null)}
       openStudio={() => { const id = mains.find((d) => d.title === detail[0])?.id || mains[0]?.id; setDetail(null); setView('studio'); openDoc(id); }} />}
   </div>;
 }

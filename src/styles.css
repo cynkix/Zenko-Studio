@@ -623,3 +623,23 @@ h3.sp-t { font: 700 13px var(--f-disp); margin: 22px 0 10px; padding-top: 14px; 
 .xd-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 14px; border-bottom: 1px solid var(--line); } .xd-row:last-child { border-bottom: 0; }
 .xd-l { color: var(--mut); font-size: 12.5px; } .xd-v { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; text-align: right; flex-wrap: wrap; justify-content: flex-end; }
 .xd-ph { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 38px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--line2); color: var(--mut); }
+
+/* Dernières exécutions : onglets lisibles, tableau triable/filtrable */
+.seg.sm.lvseg.lvrow { margin: 6px 0 10px; margin-left: 0; width: fit-content; }
+.lvseg button i { font-style: normal; margin-left: 8px; font: 700 11px var(--f-ui); opacity: .75; }
+.tbl.dense th, .tbl.dense td { padding: 10px 8px; font-size: 13px; white-space: nowrap; } .tbl.dense td.mut { color: var(--mut); font-variant-numeric: tabular-nums; }
+.sth { position: relative; } .thw { display: inline-flex; align-items: center; gap: 2px; }
+.sbtn, .fbtn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 3px 4px; border-radius: 6px; } .sbtn:hover, .fbtn:hover { background: var(--line); }
+.sbtn.on { color: var(--fg); font-weight: 700; } .sarr { display: inline-flex; opacity: .7; } .sarr.up { transform: rotate(180deg); }
+.fbtn { opacity: .55; } .fbtn.on { opacity: 1; color: var(--accent); background: var(--accent-soft, var(--line)); }
+.colmenu { position: absolute; top: 100%; left: 0; z-index: 30; min-width: 180px; display: flex; flex-direction: column; padding: 4px; background: var(--surface); border: 1px solid var(--line2); border-radius: 12px; box-shadow: 0 14px 40px -12px rgba(0,0,0,.35); text-align: left; }
+.sth:nth-last-child(-n+3) .colmenu { left: auto; right: 0; }
+.colmenu button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 8px; font: 500 13px var(--f-ui); color: var(--fg); cursor: pointer; text-transform: none; letter-spacing: 0; } .colmenu button:hover { background: var(--surface2); } .colmenu button.on { font-weight: 700; color: var(--accent); }
+/* « Dernières exécutions » pleine largeur (6 colonnes), « Workflows à surveiller » en 3 cartes dessous */
+@media (min-width: 1001px) {
+  .c-wide { grid-column: 1 / -1; }
+  .c-watch { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+  .c-watch > h2, .c-watch > .sub, .c-watch > .btn.block { grid-column: 1 / -1; }
+  .c-watch .watch { margin-bottom: 0; }
+  .c-watch > .btn.block { margin-top: 4px; width: auto; justify-self: start; padding-left: 28px; padding-right: 28px; }
+}
