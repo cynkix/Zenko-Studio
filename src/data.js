@@ -89,7 +89,7 @@ function doc(o) { return { ...o, nodes: layout(o.nodes, o.edges, 'TB') }; }
 
 export function initialDocs() {
   const inventory = doc({
-    id: 'inventory', kind: 'main', title: 'Inventaire magasin', noun: 'Inventaire', status: 'Brouillon · v3', subtitle: 'Carrefour Wavre · rayons et réserve',
+    id: 'inventory', kind: 'main', title: 'Inventaire magasin', noun: 'Inventaire', status: 'Actif · v3', subtitle: 'Carrefour Wavre · rayons et réserve',
     nodes: [
       N('start', 'start', {}),
       stp('intro', 'info', { label: 'Inventaire magasin', body: 'Carrefour Wavre. Rayon par rayon, puis la réserve (chambre froide et quai en parallèle), puis signature du responsable.' }),

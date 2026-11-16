@@ -4,7 +4,8 @@
  */
 
 /** Activité journalière (nombre de workflows lancés sur les 14 derniers jours) */
-export const DAYS = [38, 42, 35, 51, 47, 22, 14, 44, 49, 53, 46, 58, 25, 17];
+/* 28 oct. (mer.) → 10 nov. (mar.) 2026 : creux le samedi et le dimanche. Somme = 541. */
+export const DAYS = [52, 55, 48, 18, 12, 47, 51, 49, 54, 46, 21, 14, 40, 34];
 
 /** Dernières exécutions affichées dans le tableau de bord */
 export const RECENT = [

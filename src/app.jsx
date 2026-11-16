@@ -19,6 +19,7 @@ import { Emblem } from './logo.jsx';
 import { CollabPop, CommentsTab, AssistantTab, Avatar, REVIEW_LABEL } from './collab.jsx';
 import { DAYS, RECENT, PEOPLE0, COMMENTS0, USERS, DATASETS0 } from './demo.js';
 import { AssignModal, DatasetsModal } from './admin.jsx';
+import { ExecDetail } from './execdetail.jsx';
 import { Ic } from './icons.jsx';
 import { expandDoc, usageOf, makeKey, BR, INPUTS, ADD_TYPES, initialDocs, layout, branchInfo, outline, validate, makeNode, nodeOf, outsOf, uid } from './data.js';
 import { createEngine, previewEngine, submit as eSubmit, back as eBack, demoValue, hasValue, fmt, progressOf } from './engine.js';
@@ -819,19 +820,20 @@ function periodData(mode, off) {
 }
 const niceTop = (m) => { const step = m > 200 ? 100 : m > 60 ? 30 : 10; return Math.ceil(m / step) * step; };
 const sgn = (n, u) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n) + u;
-const EXECS = [['Inventaire magasin', 'Carrefour Wavre', 'Marie D.', 'Terminé', '6 min 12'], ['Visite stock hebdo', 'Carrefour Wavre', 'Paul M.', 'Terminé', '9 min 40'], ['Visite stock hebdo', 'Carrefour Namur', 'Sophie L.', 'En cours', '—'], ['Entrée de stock', 'Entrepôt Liège', 'Cyril R.', 'En attente de sync', '7 min 03'], ['Visite stock hebdo', 'Delhaize Ottignies', 'Marc T.', 'Terminé', '8 min 51'], ['Inventaire magasin', 'Delhaize Namur', 'Cyril R.', 'Terminé', '7 min 02'], ['Entrée de stock', 'Entrepôt Liège', 'Marie D.', 'Terminé', '5 min 44']];
+const EXECS = [['Inventaire magasin', 'Carrefour Wavre', 'Marie D.', 'Terminé', '6 min 12'], ['Visite stock hebdo', 'Carrefour Wavre', 'Paul M.', 'Terminé', '9 min 40'], ['Visite stock hebdo', 'Carrefour Namur', 'Sophie L.', 'En cours', '—'], ['Inventaire magasin', 'Delhaize Ottignies', 'Cyril R.', 'En attente de sync', '7 min 03'], ['Visite stock hebdo', 'Delhaize Ottignies', 'Marc T.', 'Terminé', '8 min 51'], ['Inventaire magasin', 'Delhaize Namur', 'Cyril R.', 'Terminé', '7 min 02'], ['Visite stock hebdo', 'Delhaize Namur', 'Marie D.', 'Terminé', '5 min 44']];
 
 function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
   const [dtab, setDtab] = React.useState('team');
   const mains = Object.values(wfs).filter((d) => d.kind === 'main');
   const [mode, setMode] = React.useState('custom'); const [off, setOff] = React.useState(0); const [cmp, setCmp] = React.useState('prev');
   const [lv, setLv] = React.useState('exec'); const [wfF, setWfF] = React.useState('all');
-  const [f, setF] = React.useState({ wf: '', site: '', op: '', st: '' }); const [exported, setExported] = React.useState(false);
+  const [detail, setDetail] = React.useState(null); const [f, setF] = React.useState({ wf: '', site: '', op: '', st: '' }); const [exported, setExported] = React.useState(false);
   const P = React.useMemo(() => periodData(mode, off), [mode, off]);
   const max = Math.max(...P.vals); const top = niceTop(max); const W = 640, H = 190, bw = W / P.N; const showVal = P.N <= 14;
   const cmpTxt = cmp === 'prev' ? 'vs période précédente' : 'vs année précédente';
-  const shares = [0.577, 0.423 - 0.02, 0.02]; const byWf = mains.map((d, i) => (i < mains.length - 1 ? Math.round(P.tot * (shares[i] || 0)) : 0));
-  byWf[mains.length - 1] = P.tot - byWf.slice(0, -1).reduce((a, b) => a + b, 0);
+  /* seuls les workflows activés génèrent des exécutions (les brouillons : 0) */
+  const wgt = (d) => (d.status.startsWith('Actif') ? ({ inventory: 0.577, merch: 0.423 }[d.id] ?? 0.1) : 0); const sw = mains.reduce((a, d) => a + wgt(d), 0) || 1;
+  const byWf = mains.map((d) => Math.round(P.tot * wgt(d) / sw)); const imax = byWf.indexOf(Math.max(...byWf)); byWf[imax] += P.tot - byWf.reduce((a, b) => a + b, 0);
   const rangeTxt = mode === 'day' ? fdate(P.end, { day: 'numeric', month: 'long' }) : `${fdate(P.start)} – ${fdate(P.end)}`;
   const lenTxt = { day: '1 jour', week: '7 jours', month: '30 jours', year: '12 mois', custom: '14 jours' }[mode];
   const opts = (i) => [...new Set(EXECS.map((r) => r[i]))];
@@ -871,7 +873,7 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
             {(P.N <= 14 || i % 3 === 0) && <text x={36 + i * bw + bw / 2} y={H + 20} className="gt" textAnchor="middle">{P.labels[i]}</text>}</g>; })}
         </svg><p className="cap">{mode === 'year' ? 'Saisonnalité : pic en fin d’année.' : (mode === 'day' ? 'Pic en milieu de matinée.' : 'Les week-ends sont creux.')}</p></section>
       <section className="card"><h2>Par workflow</h2><p className="sub">Volume d’exécutions sur la période</p>
-        {mains.map((d, i) => <div className="hbar" key={d.id}><span>{d.title}</span><b>{byWf[i].toLocaleString('fr-FR')}</b><div><i style={{ width: Math.max(0, (byWf[i] / Math.max(...byWf)) * 100) + '%' }} /></div></div>)}
+        {mains.map((d, i) => byWf[i] > 0 && <div className="hbar" key={d.id}><span>{d.title}</span><b>{byWf[i].toLocaleString('fr-FR')}</b><div><i style={{ width: Math.max(0, (byWf[i] / Math.max(...byWf)) * 100) + '%' }} /></div></div>)}
         <h3 className="sp-t">Statuts des exécutions</h3>
         <div className="stk"><i style={{ flex: 92, background: 'var(--ok)' }} /><i style={{ flex: 5, background: 'var(--warn)' }} /><i style={{ flex: 3, background: 'var(--err)' }} /></div>
         <div className="stk-l"><span><i style={{ background: 'var(--ok)' }} />Terminé 92 %</span><span><i style={{ background: 'var(--warn)' }} />En cours 5 %</span><span><i style={{ background: 'var(--err)' }} />Abandonné 3 %</span></div></section>
@@ -888,10 +890,10 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
         </tbody></table></div>
         <div className="tfoot"><span>{wfRows.length} workflows affichés</span><span>Les brouillons n’ont pas d’exécution</span></div>
       </> : <>
-      <p className="sub">Tous les collaborateurs · {rows.length} exécution{rows.length > 1 ? 's' : ''} sur {EXECS.length}</p>
+      <p className="sub">Tous les collaborateurs · les {EXECS.length} exécutions les plus récentes sur {P.tot.toLocaleString('fr-FR')} · cliquez sur une ligne pour voir les réponses saisies</p>
         <div className="fgrid"><FSel k="wf" label="Workflow" i={0} /><FSel k="site" label="Site" i={1} /><FSel k="op" label="Opérateur" i={2} /><FSel k="st" label="Exécution" i={3} /></div>
         <div className="tbl"><table><thead><tr><th>Workflow</th><th>Site</th><th>Opérateur</th><th>Exécution</th><th className="num">Durée</th></tr></thead><tbody>
-          {rows.map((r, i) => <tr key={i} className="tr-link" onClick={() => { setView('studio'); openDoc(mains.find((d) => d.title === r[0])?.id || mains[0]?.id); }}>
+          {rows.map((r, i) => <tr key={r.join('|')} className="tr-link" onClick={() => setDetail(r)}>
             <td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td><span className={'chip st ' + (r[3] === 'Terminé' ? 'okc' : r[3] === 'En cours' ? '' : 'warnc')}><i />{r[3]}</span></td><td className="num">{r[4]}</td></tr>)}
           {!rows.length && <tr><td colSpan={5} className="empty-row">Aucune exécution pour ces filtres.</td></tr>}
         </tbody></table></div>
@@ -914,6 +916,8 @@ function Dashboard({ wfs, openDoc, setView, newFlow, openAdmin, mgmt }) {
         {dtab === 'team' && <div className="pg-b"><button className="btn pill" onClick={() => openAdmin('data')}><Ic n="file" s={14} />Jeux de données</button><button className="btn pill" onClick={() => openAdmin('assign')}><Ic n="users" s={14} />Assigner</button><button className="btn pill" onClick={exportCsv}>{exported ? 'Exporté ✓' : 'Exporter'}</button></div>}</div>
     </header>
     {dtab === 'team' ? teamView : myView}
+    {detail && <ExecDetail row={detail} idx={EXECS.indexOf(detail)} doc={mains.find((d) => d.title === detail[0])} close={() => setDetail(null)}
+      openStudio={() => { const id = mains.find((d) => d.title === detail[0])?.id || mains[0]?.id; setDetail(null); setView('studio'); openDoc(id); }} />}
   </div>;
 }
 function FlowsHome({ wfs, openDoc, newFlow }) {
